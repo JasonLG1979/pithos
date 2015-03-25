@@ -51,6 +51,7 @@ else:
 sys.path.insert(0, os.path.dirname(fullPath))
 
 from . import AboutPithosDialog, PreferencesPithosDialog, StationsDialog
+from .StationsPopover import StationsPopover
 from .gobject_worker import GObjectWorker
 from .pandora import *
 from .pandora.data import *
@@ -300,12 +301,13 @@ class PithosWindow(Gtk.ApplicationWindow):
 
         self.songs_treeview.connect('button_press_event', self.on_treeview_button_press_event)
 
-        self.stations_combo = self.builder.get_object('stations')
-        self.stations_combo.set_model(self.stations_model)
-        render_text = Gtk.CellRendererText()
-        self.stations_combo.pack_start(render_text, True)
-        self.stations_combo.add_attribute(render_text, "text", 1)
-        self.stations_combo.set_row_separator_func(lambda model, iter, data=None: model.get_value(iter, 0) is None, None)
+        self.stations_button = self.builder.get_object('stations')
+        popover = StationsPopover()
+        popover.set_relative_to(self.stations_button)
+        popover.set_model(self.stations_model)
+        popover.listbox.connect('row-activated', self.active_station_changed)
+        self.stations_button.set_popover(popover)
+        self.stations_label = self.builder.get_object('stationslabel')
 
         self.set_initial_pos()
 
@@ -440,7 +442,6 @@ class PithosWindow(Gtk.ApplicationWindow):
         for i in self.pandora.stations:
             if i.isQuickMix and i.isCreator:
                 self.stations_model.append((i, "QuickMix"))
-        self.stations_model.append((None, 'sep'))
         for i in self.pandora.stations:
             if not (i.isQuickMix and i.isCreator):
                 self.stations_model.append((i, i.name))
@@ -650,7 +651,8 @@ class PithosWindow(Gtk.ApplicationWindow):
         self.current_station = station
         if not reconnecting:
             self.get_playlist(start = True)
-        self.stations_combo.set_active(self.station_index(station))
+        self.stations_label.set_text(station.name)
+        #self.stations_combo.set_active(self.station_index(station))
 
     def query_position(self):
       pos_stat = self.player.query(self._query_position)
@@ -845,10 +847,8 @@ class PithosWindow(Gtk.ApplicationWindow):
             self.songs_model[song.index][2] = self.song_icon(song) or ""
         return self.playing
 
-    def stations_combo_changed(self, widget):
-        index = widget.get_active()
-        if index>=0:
-            self.station_changed(self.stations_model[index][0])
+    def active_station_changed(self, listbox, row):
+        self.station_changed(row.station)
 
     def format_time(self, time_int):
         if time_int is None:
