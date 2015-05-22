@@ -842,6 +842,7 @@ class PithosWindow(Gtk.ApplicationWindow):
         artist = html.escape(song.artist)
         album = html.escape(song.album)
         msg = []
+        plugin_msg = []
         if song is self.current_song:
             song.position = self.query_position()
             if not song.bitrate is None:
@@ -854,18 +855,25 @@ class PithosWindow(Gtk.ApplicationWindow):
                     msg.append("Paused")
             if self.player_status.buffer_percent < 100:
                 msg.append("Buffering (%i%%)" % self.player_status.buffer_percent)
+        if song.persistent_plugin_message is not None:
+            plugin_msg.append(html.escape(song.persistent_plugin_message))
+        if song is self.current_song:
+            if song.non_persistent_plugin_message is not None:
+                plugin_msg.append(html.escape(song.non_persistent_plugin_message))
         if song.message:
             msg.append(song.message)
         msg = " - ".join(msg)
+        plugin_msg = "   ".join(plugin_msg)
         if not msg:
             msg = " "
-
+        if not plugin_msg:
+            plugin_msg = " "
         if song.is_ad:
             description = "<b><big>Commercial Advertisement</big></b>\n<b>Pandora</b>"
         else:
             description = "<b><big>%s</big></b>\nby <b>%s</b>\n<small>from <i>%s</i></small>" % (title, artist, album)
 
-        return "%s\n<small>%s</small>" % (description, msg)
+        return "%s\n<small>%s</small>\n<small><small>%s</small></small>" % (description, msg, plugin_msg)
 
     def song_icon(self, song):
         if song.tired:

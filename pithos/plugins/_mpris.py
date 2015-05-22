@@ -45,13 +45,23 @@ class PithosMprisService(dbus.service.Object):
     def playstate_handler(self, window, state):
         if state:
             self.signal_playing()
+            if self.window.current_song_index is not None:
+                self.window.current_song.remove_plugin_message("This is a non persistent Message We're Paused", False)
+                self.window.current_song.add_plugin_message("This is a non persistent Message We're Playing", False)
+                self.window.update_song_row()
         else:
             self.signal_paused()
-        
+            if self.window.current_song_index is not None:
+                self.window.current_song.remove_plugin_message("This is a non persistent Message We're Playing", False)
+                self.window.current_song.add_plugin_message("This is a non persistent Message We're Paused", False)
+                self.window.update_song_row()
+
     def songchange_handler(self, window, song):
         self.song_changed([song.artist], song.album, song.title, song.artRadio,
                           song.rating)
         self.signal_playing()
+        
+        song.add_plugin_message("This is a persistent Message", True)
 
     def ratingchange_handler(self, window, song):
         """Handle rating changes and update MPRIS metadata accordingly"""

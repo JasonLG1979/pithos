@@ -340,6 +340,34 @@ class Song(object):
         self.finished = False
         self.playlist_time = time.time()
         self.feedbackId = None
+        self.persistent_plugin_message = None
+        self._persistent_plugin_messages = [] 
+        self.non_persistent_plugin_message = None
+        self._non_persistent_plugin_messages = []
+
+    #Allows plugins to add and remove persistent and non persistent messages in the song description.
+    #Persistent messages are messages that stay in the song description even after the song is over.
+    #Non Persistent messages are messages that are shown only in the currently playing song's description.
+    #To add a message a plugin should call self.add_plugin_message("Your message string", boolean).
+    #Where boolean represents persistent or non persistent.
+    #self.remove_plugin_message() works much the same way. 
+    def add_plugin_message(self, message, persistent):
+        if persistent == True:
+            self._persistent_plugin_messages.append(message)
+            self.persistent_plugin_message = ' - '.join(self._persistent_plugin_messages)
+        elif persistent == False:
+            self._non_persistent_plugin_messages.append(message)
+            self.non_persistent_plugin_message = ' - '.join(self._non_persistent_plugin_messages)
+
+    def remove_plugin_message(self, message, persistent):
+        if persistent == True:
+            if message in self._persistent_plugin_messages:
+                self._persistent_plugin_messages.remove(message)
+                self.persistent_plugin_message = ' - '.join(self._persistent_plugin_messages)
+        elif persistent == False:
+            if message in self._non_persistent_plugin_messages:
+                self._non_persistent_plugin_messages.remove(message)
+                self.non_persistent_plugin_message = ' - '.join(self._non_persistent_plugin_messages)
 
     @property
     def title(self):
