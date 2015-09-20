@@ -188,18 +188,31 @@ class PithosWindow(Gtk.ApplicationWindow):
         Gst.init(None)
         self._query_duration = Gst.Query.new_duration(Gst.Format.TIME)
         self._query_position = Gst.Query.new_position(Gst.Format.TIME)
-        self.player = Gst.ElementFactory.make("playbin", "player");
+        self.player_aac = Gst.ElementFactory.make("playbin", "player_aac");
+        self.player_aac.props.flags |= (1 << 7) # enable progressive download (GST_PLAY_FLAG_DOWNLOAD)
+        bus_aac = self.player_aac.get_bus()
+        bus_aac.add_signal_watch()
+        bus_aac.connect("message::async-done", self.on_gst_async_done)
+        bus_aac.connect("message::duration-changed", self.on_gst_duration_changed)
+        bus_aac.connect("message::eos", self.on_gst_eos)
+        bus_aac.connect("message::buffering", self.on_gst_buffering)
+        bus_aac.connect("message::error", self.on_gst_error)
+        bus_aac.connect("message::element", self.on_gst_element)
+        self.player_aac.connect("notify::volume", self.on_gst_volume)
+        self.player_aac.connect("notify::source", self.on_gst_source)
 
-        bus = self.player.get_bus()
-        bus.add_signal_watch()
-        bus.connect("message::async-done", self.on_gst_async_done)
-        bus.connect("message::duration-changed", self.on_gst_duration_changed)
-        bus.connect("message::eos", self.on_gst_eos)
-        bus.connect("message::buffering", self.on_gst_buffering)
-        bus.connect("message::error", self.on_gst_error)
-        bus.connect("message::element", self.on_gst_element)
-        self.player.connect("notify::volume", self.on_gst_volume)
-        self.player.connect("notify::source", self.on_gst_source)
+        self.player_mp3 = Gst.ElementFactory.make("playbin", "player_mp3");
+
+        bus_mp3 = self.player_mp3.get_bus()
+        bus_mp3.add_signal_watch()
+        bus_mp3.connect("message::async-done", self.on_gst_async_done)
+        bus_mp3.connect("message::duration-changed", self.on_gst_duration_changed)
+        bus_mp3.connect("message::eos", self.on_gst_eos)
+        bus_mp3.connect("message::buffering", self.on_gst_buffering)
+        bus_mp3.connect("message::error", self.on_gst_error)
+        bus_mp3.connect("message::element", self.on_gst_element)
+        self.player_mp3.connect("notify::volume", self.on_gst_volume)
+        self.player_mp3.connect("notify::source", self.on_gst_source)
 
         self.player_status = PlayerStatus()
 
@@ -516,7 +529,19 @@ class PithosWindow(Gtk.ApplicationWindow):
         logging.info("Starting song: index = %i"%(song_index))
         self.player_status.reset()
 
-        self.player.set_property("uri", self.current_song.audioUrl)
+        song_url = self.current_song.audioUrl
+
+        if self.current_song.codec == "aacplus":
+            self.player = self.player_aac
+            logging.debug("AAC stream, download buffering enabled")
+        elif self.current_song.codec == "mp3":
+            self.player = self.player_mp3
+            logging.debug("MP3 stream, download buffering disabled")
+        else:
+            self.player = self.player_pm3
+            logging.debug("Unknown codec, download buffering disabled")
+
+        self.player.set_property("uri", song_url)
         self.player.set_state(Gst.State.PAUSED)
         self.playcount += 1
 
@@ -565,7 +590,8 @@ class PithosWindow(Gtk.ApplicationWindow):
 
         self.playing = None
         self.destroy_ui_loop()
-        self.player.set_state(Gst.State.NULL)
+        self.player_aac.set_state(Gst.State.NULL)
+        self.player_mp3.set_state(Gst.State.NULL)
         self.emit('play-state-changed', False)
 
     def user_playpause(self, *ignore):
@@ -796,8 +822,11 @@ class PithosWindow(Gtk.ApplicationWindow):
         self.preferences['volume'] = volume
 
     def on_gst_volume(self, player, volumespec):
-        vol = self.player.get_property('volume')
-        GLib.idle_add(self.set_volume_cb, vol)
+        vol_aac = self.player_aac.get_property('volume')
+        GLib.idle_add(self.set_volume_cb, vol_aac)
+
+        vol_mp3 = self.player_mp3.get_property('volume')
+        GLib.idle_add(self.set_volume_cb, vol_mp3)
 
     def on_gst_source(self, player, params):
         """ Setup httpsoupsrc to match Pithos proxy settings """
@@ -988,7 +1017,10 @@ class PithosWindow(Gtk.ApplicationWindow):
     def set_player_volume(self, value):
         # Use a cubic scale for volume. This matches what PulseAudio uses.
         volume = math.pow(value, 3)
-        self.player.set_property("volume", volume)
+        self.player_aac.set_property("volume", volume)
+        self.preferences['volume'] = volume
+
+        self.player_mp3.set_property("volume", volume)
         self.preferences['volume'] = volume
 
     def adjust_volume(self, amount):
@@ -1086,4 +1118,3 @@ def NewPithosWindow(app, options):
     window.set_application(app)
     window.finish_initializing(builder, options, app)
     return window
-
