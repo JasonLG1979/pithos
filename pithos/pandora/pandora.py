@@ -188,6 +188,9 @@ class Pandora(object):
         :param user:     The user's login email
         :param password: The user's login password
         """
+        self.android_generic_client = True
+        if client['deviceModel'] != 'android-generic':
+            self.android_generic_client = False        
         self.partnerId = self.userId = self.partnerAuthToken = None
         self.userAuthToken = self.time_offset = None
 
@@ -285,7 +288,8 @@ class Station(object):
 
     def get_playlist(self):
         logging.info("pandora: Get Playlist")
-        playlist = self.pandora.json_call('station.getPlaylist', {'stationToken': self.idToken}, https=True)
+        playlist = self.pandora.json_call('station.getPlaylist', {'stationToken': self.idToken,
+        'additionalAudioUrl': 'HTTP_64_AAC,HTTP_40_AAC_MONO,HTTP_32_AACPLUS_ADTS,HTTP_64_AACPLUS_ADTS,HTTP_128_MP3'}, https=True)
         songs = []
         for i in playlist['items']:
             if 'songName' in i: # check for ads
@@ -316,12 +320,12 @@ class Station(object):
         )
 
 class Song(object):
-    def __init__(self, pandora, d):
+    def __init__(self, pandora, d):     
         self.pandora = pandora
+        self.d = d
 
         self.album = d['albumName']
         self.artist = d['artistName']
-        self.audioUrlMap = d['audioUrlMap']
         self.trackToken = d['trackToken']
         self.rating = RATE_LOVE if d['songRating'] == 1 else RATE_NONE # banned songs won't play, so we don't care about them
         self.stationId = d['stationId']
@@ -329,8 +333,8 @@ class Song(object):
         self.songDetailURL = d['songDetailUrl']
         self.songExplorerUrl = d['songExplorerUrl']
         self.artRadio = d['albumArtUrl']
-
         self.bitrate = None
+        self.codec = None
         self.is_ad = None  # None = we haven't checked, otherwise True/False
         self.tired=False
         self.message=''
@@ -340,6 +344,75 @@ class Song(object):
         self.finished = False
         self.playlist_time = time.time()
         self.feedbackId = None
+
+    def _high_quality(self):
+        try:
+            if not self.pandora.android_generic_client:
+                try:
+                   _high = self.d['audioUrlMap']['highQuality']['audioUrl']
+                except:
+                    logging.warning("The Pandora One stream is not available. Attempting to fallback to 'additionalAudioUrl'.")
+                    _high = self._get_quality(5)
+            else:
+                _high = self._get_quality(5)
+            return _high
+        except:
+            return None
+
+    def _medium_quality(self):
+        try:
+            _medium = self._get_quality(4)
+        except:
+            return None
+        return _medium
+
+    def _low_quality(self):
+        try:
+            _low = self._get_quality(3)
+        except:
+            return None
+        return _low
+
+    def _get_quality(self, quality_index):
+        _quality = None
+        for i in reversed(range(quality_index)):
+            try:
+                _quality = self.d['additionalAudioUrl'][i]
+                break
+            except IndexError:
+                continue
+        else:
+            logging.warning("All out of audio from 'additionalAudioUrl'.")
+            try:
+                logging.warning("Attempting to use fallback streams from 'audioUrl'.") 
+                _audioUrlMap = self.d['audioUrlMap']
+                for i in reversed(range(3)):
+                    try:
+                        _quality = list(_audioUrlMap.values())[i]['audioUrl']
+                        break
+                    except IndexError:
+                        continue
+                else:
+                    logging.warning("All out of audio from 'audioUrl'.")
+            except:
+                logging.warning("Fallback streams not available.")
+        return _quality
+
+    def audio_url_map(self):
+        _quality_url_list = [self._high_quality(), self._medium_quality(), self._low_quality()]
+        for i in range(3):
+            try:
+                if _quality_url_list[i] is None:
+                    _quality_url_list[i] = _quality_url_list[i -1]
+            except:
+                logging.warning("All combination of streams have been tried")    
+        
+        _quality_settings_list = ['highQuality', 'mediumQuality', 'lowQuality']             
+        try:
+            url_map = dict(zip(_quality_settings_list, _quality_url_list))
+            return url_map
+        except:
+            logging.warning("Something has gone catastrophically wrong!!!")
 
     @property
     def title(self):
@@ -366,15 +439,9 @@ class Song(object):
 
     @property
     def audioUrl(self):
+        url_map = self.audio_url_map()
         quality = self.pandora.audio_quality
-        try:
-            q = self.audioUrlMap[quality]
-            logging.info("Using audio quality %s: %s %s", quality, q['bitrate'], q['encoding'])
-            return q['audioUrl']
-        except KeyError:
-            logging.warn("Unable to use audio format %s. Using %s",
-                           quality, list(self.audioUrlMap.keys())[0])
-            return list(self.audioUrlMap.values())[0]['audioUrl']
+        return url_map[quality]
 
     @property
     def station(self):
@@ -444,4 +511,3 @@ class SearchResult(object):
             self.artist = d['artistName']
         elif resultType == 'artist':
             self.name = d['artistName']
-
