@@ -59,6 +59,7 @@ class PithosMprisService(dbus.service.Object):
             "xesam:artist": [song.artist] or ["Artist Unknown"],
             "xesam:album": song.album or "Album Unknown",
             "mpris:artUrl": song.artUrl or song.artRadio or "",
+            "mpris:length": dbus.Int64(song.duration / 1000),
             "xesam:userRating": user_rating or "",
         }, "sv", variant_level=1)
 
