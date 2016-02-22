@@ -611,7 +611,6 @@ class PithosWindow(Gtk.ApplicationWindow):
         self.playing = None
         self.destroy_ui_loop()
         self.player.set_state(Gst.State.NULL)
-        self.emit('play-state-changed', False)
 
     @GtkTemplate.Callback
     def user_playpause(self, *ignore):
