@@ -17,7 +17,6 @@
 
 import dbus
 import dbus.service
-from xml.etree import ElementTree
 
 class PithosMprisService(dbus.service.Object):
     MEDIA_PLAYER2_IFACE = 'org.mpris.MediaPlayer2'
@@ -31,7 +30,7 @@ class PithosMprisService(dbus.service.Object):
         typically by calling DBusGMainLoop(set_as_default=True).
         """
 
-        bus_str = """org.mpris.MediaPlayer2.pithos"""
+        bus_str = 'org.mpris.MediaPlayer2.pithos'
         bus_name = dbus.service.BusName(bus_str, bus=dbus.SessionBus())
         dbus.service.Object.__init__(self, bus_name, "/org/mpris/MediaPlayer2")
         self.window = window
@@ -42,7 +41,13 @@ class PithosMprisService(dbus.service.Object):
         self.window.connect("song-rating-changed", self.ratingchange_handler)
         self.window.connect("mpris-play-state-changed", self.playstate_handler)
         self.window.connect("duration-changed", self.durationchange_handler)
-        
+        self.window.connect("volume-changed", self.volumechange_handler)
+
+    def volumechange_handler(self, window, volume):
+        d = dbus.Dictionary({"Volume":volume},
+                                    "sv",variant_level=1)
+        self.PropertiesChanged("org.mpris.MediaPlayer2.Player",d,[])
+                
     def playstate_handler(self, window, state):
         if self.__playback_status != state:       
             self.__playback_status = state
@@ -122,10 +127,12 @@ class PithosMprisService(dbus.service.Object):
         return self.__metadata
 
     def _get_volume(self):
+        print('get', self.window.player.get_property("volume"))
         return self.window.player.get_property("volume")
 
     def _set_volume(self, new_volume):
         self.window.player.set_property('volume', new_volume)
+        print('set', self.window.player.get_property("volume"))
 
     def _get_position(self):
         return self.window.query_position() / 1000
@@ -165,13 +172,13 @@ class PithosMprisService(dbus.service.Object):
             }
         elif interface_name == self.MEDIA_PLAYER2_PLAYER_IFACE:
             return {
-                'PlaybackStatus': self._get_playback_status(),
-                'LoopStatus': "None",
+                'PlaybackStatus': self._get_playback_status,
+                'LoopStatus': None,
                 'Rate': dbus.Double(1.0),
                 'Shuffle': False,
-                'Metadata': dbus.Dictionary(self._get_metadata(), signature='sv'),
-                'Volume': dbus.Double(self._get_volume()),
-                'Position': dbus.Int64(self._get_position()),
+                'Metadata': self._get_metadata,
+                'Volume': dbus.Double(self._get_volume, self._set_volume),
+                'Position': dbus.Int64(self._get_position, None),
                 'MinimumRate': dbus.Double(1.0),
                 'MaximumRate': dbus.Double(1.0),
                 'CanGoNext': self.window.waiting_for_playlist is not True,
@@ -231,7 +238,6 @@ class PithosMprisService(dbus.service.Object):
     @dbus.service.signal(dbus.PROPERTIES_IFACE, signature='sa{sv}as')
     def PropertiesChanged(self, interface_name, changed_properties,
                           invalidated_properties):
-        print('changed \n', changed_properties)
         """PropertiesChanged
 
         A function necessary to implement dbus properties.
@@ -241,35 +247,3 @@ class PithosMprisService(dbus.service.Object):
         """
 
         pass
-
-    # python-dbus does not have our properties for introspection, so we must manually add them
-    @dbus.service.method(dbus.INTROSPECTABLE_IFACE, in_signature="", out_signature="s",
-                         path_keyword="object_path", connection_keyword="connection")
-    def Introspect(self, object_path, connection):
-        data = dbus.service.Object.Introspect(self, object_path, connection)
-        xml = ElementTree.fromstring(data)
-
-        for iface in xml.findall("interface"):
-            name = iface.attrib["name"]
-            if name.startswith(self.MEDIA_PLAYER2_IFACE):
-                for item, value in self.GetAll(name).items():
-                    prop = {"name": item, "access": "read"}
-                    if item == "Volume": # Hardcode the only writable property..
-                        prop["access"] = "readwrite"
-
-                    # Ugly mapping of types to signatures, is there a helper for this?
-                    # KEEP IN SYNC!
-                    if isinstance(value, str):
-                        prop["type"] = "s"
-                    elif isinstance(value, bool):
-                        prop["type"] = "b"
-                    elif isinstance(value, float):
-                        prop["type"] = "d"
-                    elif isinstance(value, int):
-                        prop["type"] = "x"
-                    elif isinstance(value, list):
-                        prop["type"] = "as"
-                    elif isinstance(value, dict):
-                        prop["type"] = "a{sv}"
-                    iface.append(ElementTree.Element("property", prop))
-        return ElementTree.tostring(xml, encoding="UTF-8")

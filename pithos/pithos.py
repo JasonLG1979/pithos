@@ -133,6 +133,7 @@ class PithosWindow(Gtk.ApplicationWindow):
         "mpris-play-state-changed": (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_PYOBJECT,)),
         "play-state-changed": (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_BOOLEAN,)),
         "user-changed-play-state": (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_BOOLEAN,)),
+        "volume-changed": (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_PYOBJECT,)),
     }
 
     volume = GtkTemplate.Child()
@@ -877,6 +878,7 @@ class PithosWindow(Gtk.ApplicationWindow):
         scaled_volume = math.pow(volume, 1.0/3.0)
         self.volume.handler_block_by_func(self.on_volume_change_event)
         self.volume.set_property("value", scaled_volume)
+        self.emit('volume-changed', scaled_volume)
         self.volume.handler_unblock_by_func(self.on_volume_change_event)
 
     def on_gst_volume(self, player, volumespec):
