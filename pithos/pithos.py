@@ -129,6 +129,8 @@ class PithosWindow(Gtk.ApplicationWindow):
         "song-ended": (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_PYOBJECT,)),
         "song-art-changed": (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_PYOBJECT,)),
         "song-rating-changed": (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_PYOBJECT,)),
+        "duration-changed": (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_PYOBJECT,)),
+        "mpris-play-state-changed": (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_PYOBJECT,)),
         "play-state-changed": (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_BOOLEAN,)),
         "user-changed-play-state": (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_BOOLEAN,)),
     }
@@ -569,6 +571,8 @@ class PithosWindow(Gtk.ApplicationWindow):
         self.songs_treeview.set_cursor(song_index, None, 0)
         self.set_title("Pithos - %s by %s" % (self.current_song.title, self.current_song.artist))
 
+        self.emit('song-changed', self.current_song)
+
     @GtkTemplate.Callback
     def next_song(self, *ignore):
         self.start_song(self.current_song_index + 1)
@@ -585,6 +589,7 @@ class PithosWindow(Gtk.ApplicationWindow):
         self.playpause_image.set_from_icon_name('media-playback-pause-symbolic', Gtk.IconSize.SMALL_TOOLBAR)
         self.update_song_row()
         self.emit('play-state-changed', True)
+        self.emit('mpris-play-state-changed', "Playing")
 
     def user_pause(self, *ignore):
         self.pause()
@@ -597,6 +602,7 @@ class PithosWindow(Gtk.ApplicationWindow):
         self.playpause_image.set_from_icon_name('media-playback-start-symbolic', Gtk.IconSize.SMALL_TOOLBAR)
         self.update_song_row()
         self.emit('play-state-changed', False)
+        self.emit('mpris-play-state-changed', "Paused")
 
 
     def stop(self):
@@ -609,6 +615,8 @@ class PithosWindow(Gtk.ApplicationWindow):
         self.playing = None
         self.destroy_ui_loop()
         self.player.set_state(Gst.State.NULL)
+        self.emit('play-state-changed', False)
+        self.emit('mpris-play-state-changed', "Stopped")
 
     @GtkTemplate.Callback
     def user_playpause(self, *ignore):
@@ -745,7 +753,7 @@ class PithosWindow(Gtk.ApplicationWindow):
       self.player_status.async_done = True
       if self.player_status.pending_duration_query:
         self.current_song.duration = self.query_duration()
-        self.emit('song-changed', self.current_song)
+        self.emit('duration-changed', self.current_song)
         self.current_song.duration_message = self.format_time(self.current_song.duration)
         self.check_if_song_is_ad()
         self.player_status.pending_duration_query = False
@@ -753,7 +761,7 @@ class PithosWindow(Gtk.ApplicationWindow):
     def on_gst_duration_changed(self, bus, message):
       if self.player_status.async_done:
         self.current_song.duration = self.query_duration()
-        self.emit('song-changed', self.current_song)
+        self.emit('duration-changed', self.current_song)
         self.current_song.duration_message = self.format_time(self.current_song.duration)
         self.check_if_song_is_ad()
       else:

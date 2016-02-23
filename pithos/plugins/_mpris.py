@@ -40,13 +40,15 @@ class PithosMprisService(dbus.service.Object):
         self.window.connect("song-changed", self.songchange_handler)
         self.window.connect("song-art-changed", self.artchange_handler)
         self.window.connect("song-rating-changed", self.ratingchange_handler)
-        self.window.connect("play-state-changed", self.playstate_handler)
+        self.window.connect("mpris-play-state-changed", self.playstate_handler)
+        self.window.connect("duration-changed", self.durationchange_handler)
         
     def playstate_handler(self, window, state):
-        if state:
-            self.signal_playing()
-        else:
-            self.signal_paused()
+        if self.__playback_status != state:       
+            self.__playback_status = state
+            d = dbus.Dictionary({"PlaybackStatus":self.__playback_status},
+                                        "sv",variant_level=1)
+            self.PropertiesChanged("org.mpris.MediaPlayer2.Player",d,[])
         
     def songchange_handler(self, window, song):
         if song.rating == 'love':
@@ -59,13 +61,23 @@ class PithosMprisService(dbus.service.Object):
             "xesam:artist": [song.artist] or ["Artist Unknown"],
             "xesam:album": song.album or "Album Unknown",
             "mpris:artUrl": song.artUrl or song.artRadio or "",
-            "mpris:length": dbus.Int64(song.duration / 1000),
+            "mpris:length": dbus.Int64(0),
+            "mpris:trackid": song.trackToken,
             "xesam:userRating": user_rating or "",
         }, "sv", variant_level=1)
 
         d = dbus.Dictionary({"Metadata":self.__metadata},
                                     "sv",variant_level=1)
         self.PropertiesChanged("org.mpris.MediaPlayer2.Player",d,[])
+
+    def durationchange_handler(self, window, song):
+        if song is self.window.current_song:
+            self.__metadata['mpris:length'] = dbus.Int64(song.duration / 1000)
+            self.PropertiesChanged('org.mpris.MediaPlayer2.Player',
+                        dbus.Dictionary({'Metadata': self.__metadata},
+                        'sv',
+                        variant_level=1),
+                        [])
 
     def artchange_handler(self, window, song):
         if song is self.window.current_song:
@@ -216,29 +228,10 @@ class PithosMprisService(dbus.service.Object):
         """Stop is only used internally, mapping to pause instead"""
         self.window.pause()
 
-    def signal_playing(self):
-        """signal_playing - Tell the Sound Menu that the player has
-        started playing.
-        """
-        if self.__playback_status != "Playing":       
-            self.__playback_status = "Playing"
-            d = dbus.Dictionary({"PlaybackStatus":self.__playback_status},
-                                        "sv",variant_level=1)
-            self.PropertiesChanged("org.mpris.MediaPlayer2.Player",d,[])
-
-    def signal_paused(self):
-        """signal_paused - Tell the Sound Menu that the player has
-        been paused
-        """
-        if self.__playback_status != "Paused":
-            self.__playback_status = "Paused"
-            d = dbus.Dictionary({"PlaybackStatus":self.__playback_status},
-                                        "sv",variant_level=1)
-            self.PropertiesChanged("org.mpris.MediaPlayer2.Player",d,[])
-
     @dbus.service.signal(dbus.PROPERTIES_IFACE, signature='sa{sv}as')
     def PropertiesChanged(self, interface_name, changed_properties,
                           invalidated_properties):
+        print('changed \n', changed_properties)
         """PropertiesChanged
 
         A function necessary to implement dbus properties.
