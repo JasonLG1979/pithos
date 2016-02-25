@@ -43,19 +43,28 @@ class PithosMprisService(dbus.service.Object):
         self.window.player.set_property('volume', new_volume)
 
     def _get_position(self):
-        if self.window.query_position():
-            position = self.window.query_position() // 1000
-        else:
+        try:
+            if self.window.query_position():
+                position = self.window.query_position() // 1000
+            else:
+                position = 0
+        except:
             position = 0
         return position
 
     def _get_duration(self):
-        if self.window.query_duration():
-            return self.window.query_duration() // 1000
-        else:
+        try:
+            if self.window.query_duration():
+                return self.window.query_duration() // 1000
+            else:
+                return None
+        except:
             return None
 
-    def _get_metadata(self, song):
+    def _get_metadata(self, song=None):
+        if not song:
+            return {'mpris:trackid': '/org/mpris/MediaPlayer2/TrackList/NoTrack'}
+
         track_id = '/org/mpris/MediaPlayer2/TrackList/%s' %song.trackToken
         metadata = {'mpris:trackid': track_id}
 
@@ -131,7 +140,7 @@ class PithosMprisService(dbus.service.Object):
     def _on_metadata_changed(self, window, song):
         if song is self.window.current_song:
             self.PropertiesChanged(self.MEDIA_PLAYER2_PLAYER_IFACE,
-            {'Metadata': dbus.Dictionary(self._get_metadata(song),
+            {'Metadata': dbus.Dictionary(self._get_metadata(song=song),
             signature='sv'), }, [])
 
     def _on_playback_status_changed(self, window, state):
@@ -153,6 +162,22 @@ class PithosMprisService(dbus.service.Object):
     @dbus.service.method(dbus_interface=MEDIA_PLAYER2_IFACE)
     def Quit(self):
         self.window.quit()
+
+    @dbus.service.method(dbus_interface=MEDIA_PLAYER2_PLAYER_IFACE)
+    def LoveCurrentSong(self):
+        self.window.love_song()
+    
+    @dbus.service.method(dbus_interface=MEDIA_PLAYER2_PLAYER_IFACE)
+    def BanCurrentSong(self):
+        self.window.ban_song()
+    
+    @dbus.service.method(dbus_interface=MEDIA_PLAYER2_PLAYER_IFACE)
+    def TiredCurrentSong(self):
+        self.window.tired_song()
+
+    @dbus.service.method(dbus_interface=MEDIA_PLAYER2_PLAYER_IFACE)
+    def UnrateCurrentSong(self):
+        self.window.unrate_song()
 
     @dbus.service.method(dbus_interface=MEDIA_PLAYER2_PLAYER_IFACE)
     def Next(self):
@@ -195,16 +220,20 @@ class PithosMprisService(dbus.service.Object):
                 'HasTrackList': False,
                 'Identity': 'Pithos',
                 'DesktopEntry': 'pithos',
-                'SupportedUriSchemes': ['http'],
+                'SupportedUriSchemes': ['http', 'file'],
                 'SupportedMimeTypes': ['audio/mpeg', 'audio/aac'],
             }
         elif interface_name == self.MEDIA_PLAYER2_PLAYER_IFACE:
+            try:
+                current_song = self.window.current_song
+            except:
+                current_song = None
             return {
                 'PlaybackStatus': self._player_state,
                 'LoopStatus': 'None',
                 'Rate': dbus.Double(1.0),
                 'Shuffle': False,
-                'Metadata': dbus.Dictionary(self._get_metadata(), signature='sv'),
+                'Metadata': dbus.Dictionary(self._get_metadata(song=current_song), signature='sv'),
                 'Volume': dbus.Double(self._volume),
                 'Position': dbus.Int64(self._get_position()),
                 'MinimumRate': dbus.Double(1.0),
@@ -256,7 +285,7 @@ class PithosMprisService(dbus.service.Object):
             if name.startswith(self.MEDIA_PLAYER2_IFACE):
                 for item, value in self.GetAll(name).items():
                     prop = {"name": item, "access": "read"}
-                    if item == "Volume": # Hardcode the only writable propertys..
+                    if item == "Volume": # Hardcode the only writable property..
                         prop["access"] = "readwrite"
                     # Ugly mapping of types to signatures, is there a helper for this?
                     # KEEP IN SYNC!

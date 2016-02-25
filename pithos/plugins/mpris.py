@@ -27,18 +27,15 @@ class MprisPlugin(PithosPlugin):
             from dbus.mainloop.glib import DBusGMainLoop
             DBusGMainLoop(set_as_default=True)
             from . import _mpris
-            from . import _dbus_service
         except ImportError:
             return "python-dbus not found"
 
         self.PithosMprisService = _mpris.PithosMprisService
-        self.PithosDBusProxy = _dbus_service.PithosDBusProxy
         self.was_enabled = False
 
     def on_enable(self):
         if not self.was_enabled:
             self.mpris = self.PithosMprisService(self.window)
-            self.service = self.PithosDBusProxy(self.window)
             self.was_enabled = True
 
     def on_disable(self):
