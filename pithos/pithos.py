@@ -131,6 +131,9 @@ class PithosWindow(Gtk.ApplicationWindow):
         "song-rating-changed": (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_PYOBJECT,)),
         "play-state-changed": (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_BOOLEAN,)),
         "user-changed-play-state": (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_BOOLEAN,)),
+        "mpris-metadata-changed": (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_PYOBJECT,)),
+        "mpris-play-state-changed": (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_PYOBJECT,)),
+        "volume-changed": (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_PYOBJECT,)),
     }
 
     volume = GtkTemplate.Child()
@@ -570,6 +573,7 @@ class PithosWindow(Gtk.ApplicationWindow):
         self.set_title("Pithos - %s by %s" % (self.current_song.title, self.current_song.artist))
 
         self.emit('song-changed', self.current_song)
+        self.emit('mpris-metadata-changed', self.current_song)
 
     @GtkTemplate.Callback
     def next_song(self, *ignore):
@@ -587,6 +591,7 @@ class PithosWindow(Gtk.ApplicationWindow):
         self.playpause_image.set_from_icon_name('media-playback-pause-symbolic', Gtk.IconSize.SMALL_TOOLBAR)
         self.update_song_row()
         self.emit('play-state-changed', True)
+        self.emit('mpris-play-state-changed', 'Playing')
 
     def user_pause(self, *ignore):
         self.pause()
@@ -599,6 +604,7 @@ class PithosWindow(Gtk.ApplicationWindow):
         self.playpause_image.set_from_icon_name('media-playback-start-symbolic', Gtk.IconSize.SMALL_TOOLBAR)
         self.update_song_row()
         self.emit('play-state-changed', False)
+        self.emit('mpris-play-state-changed', 'Paused')
 
 
     def stop(self):
@@ -612,6 +618,7 @@ class PithosWindow(Gtk.ApplicationWindow):
         self.destroy_ui_loop()
         self.player.set_state(Gst.State.NULL)
         self.emit('play-state-changed', False)
+        self.emit('mpris-play-state-changed', 'Stopped')
 
     @GtkTemplate.Callback
     def user_playpause(self, *ignore):
@@ -649,6 +656,7 @@ class PithosWindow(Gtk.ApplicationWindow):
                 if file_url:
                     song.artUrl = file_url
                     self.emit('song-art-changed', song)
+                    self.emit('mpris-metadata-changed', song)
                 self.update_song_row(song)
 
         def callback(l):
@@ -748,6 +756,7 @@ class PithosWindow(Gtk.ApplicationWindow):
       self.player_status.async_done = True
       if self.player_status.pending_duration_query:
         self.current_song.duration = self.query_duration()
+        self.emit('mpris-metadata-changed', self.current_song)
         self.current_song.duration_message = self.format_time(self.current_song.duration)
         self.check_if_song_is_ad()
         self.player_status.pending_duration_query = False
@@ -755,6 +764,7 @@ class PithosWindow(Gtk.ApplicationWindow):
     def on_gst_duration_changed(self, bus, message):
       if self.player_status.async_done:
         self.current_song.duration = self.query_duration()
+        self.emit('mpris-metadata-changed', self.current_song)
         self.current_song.duration_message = self.format_time(self.current_song.duration)
         self.check_if_song_is_ad()
       else:
@@ -870,6 +880,7 @@ class PithosWindow(Gtk.ApplicationWindow):
         scaled_volume = math.pow(volume, 1.0/3.0)
         self.volume.handler_block_by_func(self.on_volume_change_event)
         self.volume.set_property("value", scaled_volume)
+        self.emit('volume-changed', scaled_volume)
         self.volume.handler_unblock_by_func(self.on_volume_change_event)
 
     def on_gst_volume(self, player, volumespec):
@@ -978,6 +989,7 @@ class PithosWindow(Gtk.ApplicationWindow):
         def callback(l):
             self.update_song_row(song)
             self.emit('song-rating-changed', song)
+            self.emit('mpris-metadata-changed', song)
         self.worker_run(song.rate, (RATE_LOVE,), callback, "Loving song...")
 
 
@@ -986,6 +998,7 @@ class PithosWindow(Gtk.ApplicationWindow):
         def callback(l):
             self.update_song_row(song)
             self.emit('song-rating-changed', song)
+            self.emit('mpris-metadata-changed', song)
         self.worker_run(song.rate, (RATE_BAN,), callback, "Banning song...")
         if song is self.current_song:
             self.next_song()
@@ -995,6 +1008,7 @@ class PithosWindow(Gtk.ApplicationWindow):
         def callback(l):
             self.update_song_row(song)
             self.emit('song-rating-changed', song)
+            self.emit('mpris-metadata-changed', song)
         self.worker_run(song.rate, (RATE_NONE,), callback, "Removing song rating...")
 
     def tired_song(self, *ignore, song=None):
@@ -1002,6 +1016,7 @@ class PithosWindow(Gtk.ApplicationWindow):
         def callback(l):
             self.update_song_row(song)
             self.emit('song-rating-changed', song)
+            self.emit('mpris-metadata-changed', song)
         self.worker_run(song.set_tired, (), callback, "Putting song on shelf...")
         if song is self.current_song:
             self.next_song()
