@@ -61,10 +61,7 @@ class PithosMprisService(dbus.service.Object):
         except:
             return None
 
-    def _get_metadata(self, song=None):
-        if not song:
-            return {'mpris:trackid': '/org/mpris/MediaPlayer2/TrackList/NoTrack'}
-
+    def _get_metadata(self, song):
         track_id = '/org/mpris/MediaPlayer2/TrackList/%s' %song.trackToken
         metadata = {'mpris:trackid': track_id}
 
@@ -140,7 +137,7 @@ class PithosMprisService(dbus.service.Object):
     def _on_metadata_changed(self, window, song):
         if song is self.window.current_song:
             self.PropertiesChanged(self.MEDIA_PLAYER2_PLAYER_IFACE,
-            {'Metadata': dbus.Dictionary(self._get_metadata(song=song),
+            {'Metadata': dbus.Dictionary(self._get_metadata(song),
             signature='sv'), }, [])
 
     def _on_playback_status_changed(self, window, state):
@@ -224,16 +221,12 @@ class PithosMprisService(dbus.service.Object):
                 'SupportedMimeTypes': ['audio/mpeg', 'audio/aac'],
             }
         elif interface_name == self.MEDIA_PLAYER2_PLAYER_IFACE:
-            try:
-                current_song = self.window.current_song
-            except:
-                current_song = None
             return {
                 'PlaybackStatus': self._player_state,
                 'LoopStatus': 'None',
                 'Rate': dbus.Double(1.0),
                 'Shuffle': False,
-                'Metadata': dbus.Dictionary(self._get_metadata(song=current_song), signature='sv'),
+                'Metadata': dbus.Dictionary(self._get_metadata(), signature='sv'),
                 'Volume': dbus.Double(self._volume),
                 'Position': dbus.Int64(self._get_position()),
                 'MinimumRate': dbus.Double(1.0),
