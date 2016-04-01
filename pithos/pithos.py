@@ -131,6 +131,7 @@ class PithosWindow(Gtk.ApplicationWindow):
         "user-changed-play-state": (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_BOOLEAN,)),
         "metadata-changed": (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_PYOBJECT,)),
         "volume-changed": (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_PYOBJECT,)),
+        "sync-position": (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_PYOBJECT,)),
     }
 
     volume = GtkTemplate.Child()
@@ -864,6 +865,9 @@ class PithosWindow(Gtk.ApplicationWindow):
                 self.player.set_state(Gst.State.PLAYING)
             else:
                 logging.debug("Buffer recovery. User paused")
+            #Tell everyone to update their clocks after we're done buffering or 
+            #in case it takes a while after the song-changed signal for actual playback to begin.
+            self.emit('sync-position', self.query_position() or 0)
             self.player_status.began_buffering = None
         self.player_status.buffer_percent = percent
         self.update_song_row()

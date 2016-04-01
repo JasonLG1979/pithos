@@ -45,6 +45,7 @@ class PithosMprisService(dbus.service.Object):
         self.window.connect("metadata-changed", self._metadatachange_handler)
         self.window.connect("play-state-changed", self._playstate_handler)
         self.window.connect("volume-changed", self._volumechange_handler)
+        self.window.connect("sync-position", lambda window, position: self.Seeked(position // 1000))
 
         # Updates everything if mpris is enabled in the middle of a song
         if self.window.current_song:
@@ -100,25 +101,21 @@ class PithosMprisService(dbus.service.Object):
             userRating = 0
 
         # Try to use the generic audio MIME type icon from the user's current theme
-        # for the cover image if we don't get one from Pandora else return an empty string
+        # for the cover image if we don't get one from Pandora
         # Workaround for:
         # https://github.com/eonpatapon/gnome-shell-extensions-mediaplayer/issues/248
 
         if song.artUrl is not None:
             artUrl = song.artUrl
         else:
-            icon_theme = Gtk.IconTheme.get_default()
-            standard_icon_sizes = (256, 96, 64, 48, 32, 24, 22, 16)
-            icon_info = None
-            for i in standard_icon_sizes: # Get the largest icon we can
-                icon_info = icon_theme.lookup_icon('audio-x-generic', i, 0)
-                if icon_info is not None:
-                    break
-
-            if icon_info is not None:
-                artUrl = "file://%s" %icon_info.get_filename()
+            icon_sizes = Gtk.IconTheme.get_icon_sizes(Gtk.IconTheme.get_default(), 'audio-x-generic')
+            if -1 in icon_sizes:# -1 is a scalable icon(svg)
+                best_icon = -1
             else:
-                artUrl = ""
+                icon_sizes = sorted(icon_sizes, key=int, reverse=True)
+                best_icon = icon_sizes[0] 
+            icon_info = Gtk.IconTheme.get_default().lookup_icon('audio-x-generic', best_icon, 0)
+            artUrl = "file://%s" %icon_info.get_filename()
 
         # Ensure is a valid dbus path by converting to hex
         track_id = codecs.encode(bytes(song.trackToken, 'ascii'), 'hex').decode('ascii')
@@ -301,7 +298,7 @@ class PithosMprisService(dbus.service.Object):
 
         (The MPRIS client tells the player that it wants to seek to a position >>>
          the player seeks to the disired position >>>
-         the player tells MPRIS client were it actually seeked too.)
+         the player tells the MPRIS client were it actually seeked too.)
 
         We're skipping the middleman(Pithos) because we can't seek. Some players do not send
         a Seeked signal and some clients workaround that[2] so this may not be necessary for
