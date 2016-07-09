@@ -115,6 +115,9 @@ class PithosWindow(Gtk.ApplicationWindow):
     song_menu_unlove = GtkTemplate.Child()
     song_menu_ban = GtkTemplate.Child()
     song_menu_unban = GtkTemplate.Child()
+    song_menu_tired = GtkTemplate.Child()
+    song_menu_info = GtkTemplate.Child()
+    menuitem4 = GtkTemplate.Child()
     songs_treeview = GtkTemplate.Child()
     stations_button = GtkTemplate.Child()
     stations_label = GtkTemplate.Child()
@@ -494,7 +497,19 @@ class PithosWindow(Gtk.ApplicationWindow):
         if self.current_song_index is not None:
             return self.songs_model[self.current_song_index][0]
 
+    def register_if_ad(self, song_index):
+        #If the upcoming song is an ad, register_ad before we possibly get a new playlist.
+        #The theory is that we want Pandora to know we heard any ads in the last playlist
+        #before we ask for another one so hopefully they send us as few ads as possible.
+        if self.current_song_index is not None:
+            songs_remaining = len(self.songs_model) - song_index
+            if not songs_remaining <= 0:
+                upcoming_song = self.songs_model[song_index][0]
+                if upcoming_song.is_ad:    
+                    self.worker_run(self.pandora.register_ad, (upcoming_song.adTokens, self.current_station.id), )
+
     def start_song(self, song_index):
+        self.register_if_ad(song_index)
         songs_remaining = len(self.songs_model) - song_index
 
         if songs_remaining <= 0:
@@ -530,7 +545,10 @@ class PithosWindow(Gtk.ApplicationWindow):
         self.current_song.start_time = time.time()
         self.songs_treeview.scroll_to_cell(song_index, use_align=True, row_align = 1.0)
         self.songs_treeview.set_cursor(song_index, None, 0)
-        self.set_title("Pithos - %s by %s" % (self.current_song.title, self.current_song.artist))
+        if self.current_song.is_ad:
+            self.set_title('Commercial Advertisement - Pithos')
+        else:
+            self.set_title("%s by %s - Pithos" % (self.current_song.title, self.current_song.artist))
 
         self.emit('song-changed', self.current_song)
         self.emit('metadata-changed', self.current_song)
@@ -1007,12 +1025,23 @@ class PithosWindow(Gtk.ApplicationWindow):
             treeview.set_cursor( path, col, 0)
 
             if event.button == 3:
-                rating = self.selected_song().rating
-                self.song_menu_love.set_property("visible", rating != RATE_LOVE)
-                self.song_menu_unlove.set_property("visible", rating == RATE_LOVE)
-                self.song_menu_ban.set_property("visible", rating != RATE_BAN)
-                self.song_menu_unban.set_property("visible", rating == RATE_BAN)
-
+                if not self.selected_song().is_ad:
+                    rating = self.selected_song().rating
+                    self.song_menu_love.set_property("visible", rating != RATE_LOVE)
+                    self.song_menu_unlove.set_property("visible", rating == RATE_LOVE)
+                    self.song_menu_ban.set_property("visible", rating != RATE_BAN)
+                    self.song_menu_unban.set_property("visible", rating == RATE_BAN)
+                    self.song_menu_info.set_property("label", 'Song _Info...')
+                    self.song_menu_tired.set_property("visible", True)
+                    self.menuitem4.set_property("visible", True)
+                else:
+                    self.song_menu_love.set_property("visible", False)
+                    self.song_menu_unlove.set_property("visible", False)
+                    self.song_menu_ban.set_property("visible", False)
+                    self.song_menu_unban.set_property("visible", False)
+                    self.song_menu_info.set_property("label", 'Ad _Info...')
+                    self.song_menu_tired.set_property("visible", False)
+                    self.menuitem4.set_property("visible", False)
                 self.song_menu.popup( None, None, None, None, event.button, time)
                 return True
 
