@@ -15,8 +15,8 @@
 ### END LICENSE
 
 import logging
-
-from gi.repository import Gio, Gtk, GObject, Pango
+from gettext import gettext as _
+from gi.repository import Gio, Gtk, GLib, GObject, Pango
 
 from .gi_composites import GtkTemplate
 from .util import get_account_password, set_account_password
@@ -28,7 +28,6 @@ except ImportError:
     pacparser = None
     logging.info("Could not import python-pacparser.")
 
-
 class PithosPluginRow(Gtk.ListBoxRow):
 
     def __init__(self, plugin):
@@ -36,44 +35,58 @@ class PithosPluginRow(Gtk.ListBoxRow):
 
         self.plugin = plugin
 
-        box = Gtk.Box()
+        self.box = Gtk.Box()
         label = Gtk.Label()
-        label.set_markup('<b>{}</b>\n{}'.format(plugin.name.title().replace('_', ' '), plugin.description))
+        label.set_markup('<b>{}</b>\n<small>{}</small>'.format(_(plugin.name.title().replace('_', ' ')), _(plugin.description)))
         label.set_halign(Gtk.Align.START)
         label.set_ellipsize(Pango.EllipsizeMode.END)
         label.set_max_width_chars(30)
         label.set_line_wrap(True)
         label.set_lines(1)
-        box.pack_start(label, True, True, 4)
+        self.box.pack_start(label, True, True, 4)
 
-        self.switch = Gtk.Switch()
-        plugin.settings.bind('enabled', self.switch, 'active', Gio.SettingsBindFlags.DEFAULT)
-        self.switch.connect('notify::active', self.on_activated)
-        self.switch.set_valign(Gtk.Align.CENTER)
-        box.pack_end(self.switch, False, False, 2)
-
+        self.switch = Gtk.Switch(active=plugin.enabled, valign=Gtk.Align.CENTER)
+        plugin.settings.bind('enabled', self.switch, 'active', Gio.SettingsBindFlags.SET)
         if plugin.prepared and plugin.error:
             self.set_sensitive(False)
+            self.switch.set_active(False)
             self.set_tooltip_text(plugin.error)
+            self.show_error_icon()
 
-        self.add(box)
+        self.switch_handler = self.switch.connect('notify::active', self.on_activated)
+        self.box.pack_end(self.switch, False, False, 2)            
+        self.add(self.box)
 
-    def on_activated(self, obj, params):
+    def on_activated(self, switch, params):
         if not self.is_selected():
             self.get_parent().select_row(self)
 
-        if self.switch.get_active():
+        if switch.get_active():
             self.plugin.enable()
+            if self.plugin.prepared and self.plugin.error:
+                self.get_parent().unselect_row(self)
+                self.set_sensitive(False)
+                GLib.idle_add(self.turn_switch_off_safely, priority=GLib.PRIORITY_LOW)
+                self.set_tooltip_text(self.plugin.error)
+                self.show_error_icon()
+
+            elif self.plugin.prepared:
+                self.get_toplevel().preference_btn.set_sensitive(self.plugin.preferences_dialog is not None)
         else:
             self.plugin.disable()
 
-        if self.plugin.prepared and self.plugin.error:
-            self.get_parent().unselect_row(self)
-            self.set_sensitive(False)
-            self.set_tooltip_text(self.plugin.error)
-        elif self.plugin.prepared:
-            self.get_toplevel().preference_btn.set_sensitive(self.plugin.preferences_dialog is not None)
+    def turn_switch_off_safely(self):
+        with self.switch.handler_block(self.switch_handler):
+            self.switch.set_active(False)
 
+    def show_error_icon(self):
+        icon = Gio.ThemedIcon.new_with_default_fallbacks('dialog-error-symbolic')
+        error_icon = Gtk.Image.new_from_gicon(icon, Gtk.IconSize.SMALL_TOOLBAR)
+        error_icon.set_valign(Gtk.Align.CENTER)
+        error_icon.set_halign(Gtk.Align.END)
+        self.box.pack_start(error_icon, True, True, 4)
+        error_icon.set_sensitive(False)
+        error_icon.show()    
 
 @GtkTemplate(ui='/io/github/Pithos/ui/PreferencesPithosDialog.ui')
 class PreferencesPithosDialog(Gtk.Dialog):
@@ -112,7 +125,7 @@ class PreferencesPithosDialog(Gtk.Dialog):
 
         if not pacparser:
             self.control_proxy_pac_entry.set_sensitive(False)
-            self.control_proxy_pac_entry.set_tooltip_text("Please install python-pacparser")
+            self.control_proxy_pac_entry.set_tooltip_text(_("Please install python-pacparser"))
 
         settings_mapping = {
             'email': (self.email_entry, 'text'),
