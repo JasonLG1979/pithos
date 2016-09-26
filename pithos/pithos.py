@@ -54,6 +54,9 @@ except ImportError:
 ALBUM_ART_SIZE = 96
 TEXT_X_PADDING = 12
 
+LASTFM_ROOT = 'http://ws.audioscrobbler.com/2.0/?'
+LASTFM_KEY = '997f635176130d5d6fe3a7387de601a8'
+
 class CellRendererAlbumArt(Gtk.CellRenderer):
     def __init__(self):
         super().__init__(height=ALBUM_ART_SIZE, width=ALBUM_ART_SIZE)
@@ -680,6 +683,9 @@ class PithosWindow(Gtk.ApplicationWindow):
                 i.artUrl = None
                 if i.artRadio:
                     self.art_worker.send(get_album_art, (i.artRadio, self.tempdir, i, i.index), art_callback)
+                else:
+                    logging.info("No art url provided by Pandora for %i"%i.index)
+                    self.get_lastfm_art(i, get_album_art, art_callback)
 
             self.statusbar.pop(self.statusbar.get_context_id('net'))
             if self.start_new_playlist:
@@ -693,6 +699,83 @@ class PithosWindow(Gtk.ApplicationWindow):
 
         self.waiting_for_playlist = True
         self.worker_run(self.current_station.get_playlist, (), callback, "Getting songs...")
+
+    def get_lastfm_art(self, song, get_album_art, art_callback):
+        def last_fm_api_call(api_call, key):
+            try:
+                with urllib.request.urlopen(api_call) as response:
+                    lastfm_response = json.loads(response.read().decode('utf-8'))
+                info = lastfm_response.get(key)
+                if not info:
+                    return None
+                images = info.get('image')           
+                if not images:
+                    return None
+                # Last.fm image sizes are not set sizes by pixel
+                # they are relative sizes:
+                # 'small', 'medium', 'large', 'extralarge', 'mega' and ''.
+                # Not all sizes actually have an image url associated
+                # with them. They may be an empty string.
+                # We prefer the named sizes from 'mega' to 'large'
+                # and then the unnamed '' size so we slice the list,
+                # reverse the order, and pop the '' size to the end.
+                # The 'small' and 'medium' sizes are usually unusably small.
+                images = images[2:] 
+                images.reverse()
+                images += [images.pop(0)]            
+                for image in images:
+                    art_url = image['#text']
+                    if art_url:
+                        return art_url
+                return None                
+            except urllib.error.HTTPError:
+                return None
+
+        def get_art_url_from_lastfm(call_key_pairs):
+            for val in call_key_pairs:
+                art_url = last_fm_api_call(val[0], val[1])
+                if art_url is not None:
+                    logging.info("got %s image from Last.fm for %i" %(val[1], song.index))
+                    return art_url                     
+            return None
+
+        def set_art(art_url):
+            if art_url is not None:
+                self.art_worker.send(get_album_art, (art_url, self.tempdir, song, song.index), art_callback)
+            else:
+                logging.info("No match for %s by %s for %i found with Last.fm." %(song.title, song.artist, song.index))
+                                    
+        artist = self.clean_text_for_lastfm(song.artist)
+        album = self.clean_text_for_lastfm(song.album, album=True)
+        get_album_info = '{}method=album.getinfo&api_key={}&artist={}&album={}&format=json'.format(LASTFM_ROOT, LASTFM_KEY, artist, album)
+        get_artist_info = '{}method=artist.getinfo&api_key={}&artist={}&format=json'.format(LASTFM_ROOT, LASTFM_KEY, artist)     
+        self.art_worker.send(get_art_url_from_lastfm, ([(get_album_info, 'album'), (get_artist_info, 'artist')],), set_art)
+
+    def clean_text_for_lastfm(self, text, album=False, brackets="()[]"):
+        # Format artist names and album titles for use with Last.fm.
+        # Git rid of "()" and "[]" and all text in them.
+        # http://stackoverflow.com/questions/14596884/remove-text-between-and-in-python
+        count = [0] * (len(brackets) // 2) # count open/close brackets
+        saved_chars = []
+        for character in text:
+            for i, b in enumerate(brackets):
+                if character == b: # found bracket
+                    kind, is_close = divmod(i, 2)
+                    count[kind] += (-1)**is_close # `+1`: open, `-1`: close
+                    if count[kind] < 0: # unbalanced bracket
+                        count[kind] = 0
+                    break
+            else: # character is not a bracket
+                if not any(count): # outside brackets
+                    saved_chars.append(character)
+        cleaned_text = ''.join(saved_chars).strip()
+        if album: # Last.fm doesn't like album titles that end with any variation EP or LP.
+            suffixes_to_strip = [' EP', ' - EP', ' ep', ' - ep', ' Ep', ' - Ep',
+                                 ' LP', ' - LP', ' lp', ' - lp', ' Lp', ' - Lp']
+            for suffix in suffixes_to_strip:                    
+                if cleaned_text.endswith(suffix):
+                    cleaned_text = cleaned_text[:len(cleaned_text) - len(suffix)].strip()
+        return urllib.parse.quote(cleaned_text)
 
     def error_dialog(self, message, retry_cb, submsg=None):
         dialog = self.error_dialog_real
