@@ -250,6 +250,7 @@ class PithosWindow(Gtk.ApplicationWindow):
         self.stations_popover.listbox.connect('row-activated', self.active_station_changed)
         self.stations_button.set_popover(self.stations_popover)
 
+        self.set_initial_size()
         self.set_initial_pos()
 
     def init_actions(self, app):
@@ -1118,6 +1119,13 @@ class PithosWindow(Gtk.ApplicationWindow):
         if not x is None and not y is None:
             self.move(int(x), int(y))
 
+    def set_initial_size(self):
+        if self.settings['win-max']:
+            self.maximize()
+        width, height = self.settings['win-size']
+        if not width is None and not height is None:
+            self.resize(int(width), int(height))
+
     def bring_to_top(self, *ignore):
         self.set_initial_pos()
         self.show()
@@ -1125,8 +1133,17 @@ class PithosWindow(Gtk.ApplicationWindow):
 
     @GtkTemplate.Callback
     def on_configure_event(self, widget, event, data=None):
-        self.settings.set_value('win-pos', GLib.Variant('(ii)', (event.x, event.y)))
+        maximized = widget.get_window().get_state() & Gdk.WindowState.MAXIMIZED == Gdk.WindowState.MAXIMIZED
+        if not maximized:
+            width, height = widget.get_size()
+            self.settings.set_value('win-pos', GLib.Variant('(ii)', (event.x, event.y)))
+            self.settings.set_value('win-size', GLib.Variant('(ii)', (width, height)))
         return False
+
+    @GtkTemplate.Callback
+    def on_window_state_event(self, widget, event, data=None):
+        maximized = widget.get_window().get_state() & Gdk.WindowState.MAXIMIZED == Gdk.WindowState.MAXIMIZED
+        self.settings.set_value("win-max", GLib.Variant('b', maximized))
 
     def quit(self, widget=None, data=None):
         """quit - signal handler for closing the PithosWindow"""
