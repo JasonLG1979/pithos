@@ -173,6 +173,17 @@ class PithosWindow(Gtk.ApplicationWindow):
         self._query_duration = Gst.Query.new_duration(Gst.Format.TIME)
         self._query_position = Gst.Query.new_position(Gst.Format.TIME)
         self.player = Gst.ElementFactory.make("playbin", "player")
+        bin = Gst.ElementFactory.make("bin", "bin")
+        self.queue = Gst.ElementFactory.make("queue2", "queue")
+        self.queue.set_property("use-buffering", True)
+        self.queue.set_property("max-size-time", 0)
+        self.queue.set_property("use-rate-estimate", False)
+        autoaudiosink = Gst.ElementFactory.make("autoaudiosink", "autoaudiosink")
+        bin.add(self.queue)
+        bin.add(autoaudiosink)
+        self.queue.link(autoaudiosink)
+        bin.add_pad(Gst.GhostPad.new("sink", self.queue.get_static_pad("sink")))
+        self.player.set_property("audio-sink", bin)
 
         bus = self.player.get_bus()
         bus.add_signal_watch()
@@ -822,6 +833,8 @@ class PithosWindow(Gtk.ApplicationWindow):
 
         # 100% doesn't mean the entire song is downloaded, but it does mean that it's safe to play.
         # trying to play before 100% will cause stuttering.
+        if message.src is not self.queue:
+            return 
         percent = message.parse_buffering()
         logging.debug("Buffering (%i%%)", percent)
 
