@@ -186,6 +186,7 @@ class PithosWindow(Gtk.ApplicationWindow):
         self._query_buffer = Gst.Query.new_buffering(Gst.Format.PERCENT)
 
         self.player = Gst.ElementFactory.make("playbin", "player")
+        self.player.set_property("buffer-duration", 5 * Gst.SECOND)
 
         bus = self.player.get_bus()
         bus.add_signal_watch()
@@ -572,6 +573,7 @@ class PithosWindow(Gtk.ApplicationWindow):
         logging.info("Starting song: index = %i"%(song_index))
 
         self.player.set_property("uri", self.current_song.audioUrl)
+        self.player.set_property("buffer-size", int(self.current_song.bitrate) * 625)
         self._set_player_state(PseudoGst.BUFFERING)
         self.playcount += 1
 
