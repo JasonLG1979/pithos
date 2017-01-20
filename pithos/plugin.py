@@ -40,6 +40,14 @@ class PithosPlugin:
             self.on_enable()
             self.enabled = True
 
+    def on_async_prepared(self, error=None):
+        if not error:
+            self.on_async_enable()
+        else:
+            self.enabled = False
+            self.error = error
+            self.settings['enabled'] = False
+
     def disable(self):
         if self.enabled:
             logging.info('Disabling module {}'.format(self.name))
@@ -50,6 +58,9 @@ class PithosPlugin:
         pass
 
     def on_enable(self):
+        pass
+
+    def on_async_enable(self):
         pass
 
     def on_disable(self):
