@@ -18,7 +18,7 @@ import logging
 from gi.repository import Gio, Gtk, GObject, Pango
 
 from .gi_composites import GtkTemplate
-from .util import get_account_password, set_account_password
+from .util import SecretService
 from .pandora.data import valid_audio_formats
 
 try:
@@ -92,6 +92,7 @@ class PreferencesPithosDialog(Gtk.Dialog):
     control_proxy_pac_entry = GtkTemplate.Child()
     pandora_one_checkbutton = GtkTemplate.Child()
     explicit_content_filter_checkbutton = GtkTemplate.Child()
+    keyring_checkbutton = GtkTemplate.Child()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, use_header_bar=1, **kwargs)
@@ -120,6 +121,7 @@ class PreferencesPithosDialog(Gtk.Dialog):
             'control-proxy': (self.control_proxy_entry, 'text'),
             'control-proxy-pac': (self.control_proxy_pac_entry, 'text'),
             'audio-quality': (self.audio_quality_combo, 'active-id'),
+            'dont-unlock-keyring': (self.keyring_checkbutton, 'active')
         }
 
         for key, val in settings_mapping.items():
@@ -162,13 +164,13 @@ class PreferencesPithosDialog(Gtk.Dialog):
         self.settings.delay()
 
         self.last_email = self.settings['email']
-        self.password_entry.set_text(get_account_password(self.settings['email']))
+        self.password_entry.set_text(SecretService.get_account_password(self.settings['email']))
         self.on_account_changed(None)
 
     def do_response(self, response_id):
         if response_id == Gtk.ResponseType.APPLY:
             self.settings.apply()
-            if set_account_password(self.settings['email'], self.password_entry.get_text(),
+            if SecretService.set_account_password(self.settings['email'], self.password_entry.get_text(),
                                     self.last_email):
                 self.emit('login-changed')
         else:

@@ -24,36 +24,104 @@ from gi.repository import (
     Gtk
 )
 
-_ACCOUNT_SCHEMA = Secret.Schema.new('io.github.Pithos.Account', Secret.SchemaFlags.NONE,
-                                    {"email": Secret.SchemaAttributeType.STRING})
+class _SecretService:
+    __account_schema = None
+    __service = None
+    __default_collection = None
+    _current_collection = Secret.COLLECTION_DEFAULT
 
+    @property
+    def _account_schema(self):
+        if self.__account_schema is None:
+            self.__account_schema = Secret.Schema.new(
+                'io.github.Pithos.Account',
+                Secret.SchemaFlags.NONE,
+                {'email': Secret.SchemaAttributeType.STRING},
+            )
 
-# TODO: Async
-def get_account_password(email):
-    return Secret.password_lookup_sync(_ACCOUNT_SCHEMA, {"email": email}, None) or ''
+        return self.__account_schema
 
+    @property
+    def _service(self): 
+        if self.__service is None:
+            self.__service = Secret.Service.get_sync(
+                Secret.ServiceFlags.NONE,
+                None,
+            )
 
-def _clear_account_password(email):
-    return Secret.password_clear_sync(_ACCOUNT_SCHEMA, {"email": email}, None)
+        return self.__service
 
+    @property
+    def _default_collection(self):
+        if self.__default_collection is None:
+            self.__default_collection = Secret.Collection.for_alias_sync(
+                self._service,
+                Secret.COLLECTION_DEFAULT,
+                Secret.CollectionFlags.NONE,
+                None,
+            )
 
-def set_account_password(email, password, previous_email=None):
-    if previous_email and previous_email != email:
-        if not _clear_account_password(previous_email):
-            logging.warning('Failed to clear previous account')
+        return self.__default_collection
 
-    if not password:
-        return _clear_account_password(email)
+    def try_unlock(self, dont_unlock_keyring):
+        if not self._default_collection.get_locked():
+            logging.debug('The default keyring is unlocked.')
+            return True
+        else:
+            if dont_unlock_keyring:
+                self._current_collection = Secret.COLLECTION_SESSION
+                logging.debug('The default keyring is locked. Using session collection.')
+                return True
+            else:
+                num_items, unlocked = self._service.unlock_sync(
+                    [self._default_collection],
+                    None,
+                )
 
-    attrs = {"email": email}
-    if password == get_account_password(email):
-        logging.debug('Password unchanged')
-        return False
+                if not num_items or self._default_collection not in unlocked:
+                    self._current_collection = Secret.COLLECTION_SESSION
+                    logging.debug('The default keyring is locked. Using session collection.')
 
-    Secret.password_store_sync(_ACCOUNT_SCHEMA, attrs, Secret.COLLECTION_DEFAULT,
-                               "Pandora Account", password, None)
-    return True
+                return not self._default_collection.get_locked()
 
+    def get_account_password(self, email):
+        return Secret.password_lookup_sync(
+            self._account_schema,
+            {"email": email},
+            None,
+        ) or ''
+
+    def _clear_account_password(self, email):
+        return Secret.password_clear_sync(
+            self._account_schema,
+            {"email": email},
+            None,
+        )
+
+    def set_account_password(self, email, password, previous_email=None):
+        if previous_email and previous_email != email:
+            if not self._clear_account_password(previous_email):
+                logging.warning('Failed to clear previous account')
+
+        if not password:
+            return self._clear_account_password(email)
+
+        if password == self.get_account_password(email):
+            logging.debug('Password unchanged')
+            return False
+
+        Secret.password_store_sync(
+            self._account_schema,
+            {'email': email},
+            self._current_collection,
+            'Pandora Account',
+            password,
+            None,
+        )
+
+        return True
+
+SecretService = _SecretService()
 
 def parse_proxy(proxy):
     """ _parse_proxy from urllib """
@@ -99,4 +167,3 @@ if hasattr(Gtk.Menu, 'popup_at_pointer'):
     popup_at_pointer = Gtk.Menu.popup_at_pointer
 else:
     popup_at_pointer = lambda menu, event: menu.popup(None, None, None, None, event.button, event.time)
-

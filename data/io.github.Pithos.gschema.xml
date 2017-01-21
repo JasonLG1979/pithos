@@ -17,6 +17,11 @@
       <summary>Sort the stations list in the popup is sorted alphabetically</summary>
     </key>
 
+    <key type="b" name="dont-unlock-keyring">
+      <default>false</default>
+      <summary>Don't attempt to unlock the Keyring if it is not already unlocked</summary>
+    </key>
+
     <key type="s" name="last-station-id">
       <default>""</default>
       <summary>ID of last station played</summary>

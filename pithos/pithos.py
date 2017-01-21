@@ -42,7 +42,7 @@ from .gobject_worker import GObjectWorker
 from .pandora import *
 from .pandora.data import *
 from .plugin import load_plugins
-from .util import parse_proxy, open_browser, get_account_password, popup_at_pointer
+from .util import parse_proxy, open_browser, SecretService, popup_at_pointer
 
 try:
     import pacparser
@@ -161,9 +161,12 @@ class PithosWindow(Gtk.ApplicationWindow):
         self.set_proxy(reconnect=False)
         self.set_audio_quality()
 
+        if not SecretService.try_unlock(self.settings['dont-unlock-keyring']):
+            self.show_keyring_warning()
+
         email = self.settings['email']
         try:
-            password = get_account_password(email)
+            password = SecretService.get_account_password(email)
         except GLib.Error as e:
             if e.code == 2:
                 self.fatal_error_dialog(e.message, _('You need to install a service such as gnome-keyring.'))
@@ -458,7 +461,7 @@ class PithosWindow(Gtk.ApplicationWindow):
 
 
         email = self.settings['email']
-        password = get_account_password(email)
+        password = SecretService.get_account_password(email)
         if not email or not password:
             # You probably shouldn't be able to reach here
             # with no credentials set
@@ -729,6 +732,19 @@ class PithosWindow(Gtk.ApplicationWindow):
 
         self.waiting_for_playlist = True
         self.worker_run(self.current_station.get_playlist, (), callback, "Getting songs...")
+
+    def show_keyring_warning(self):
+        keyring_warning = Gtk.MessageDialog(
+            parent=self,
+            flags=Gtk.DialogFlags.MODAL,
+            type=Gtk.MessageType.WARNING,
+            buttons=Gtk.ButtonsType.OK,
+            text=_('The default keyring is locked'),
+            secondary_text=_('Passwords will not survive past the current session.'),
+        )
+
+        keyring_warning.connect('response', lambda *ignore: keyring_warning.destroy())
+        keyring_warning.run()
 
     def error_dialog(self, message, retry_cb, submsg=None):
         dialog = self.error_dialog_real

@@ -270,6 +270,21 @@
                             <property name="top_attach">3</property>
                           </packing>
                         </child>
+                        <child>
+                          <object class="GtkCheckButton" id="keyring_checkbutton">
+                            <property name="label" translatable="yes">Never attempt to unlock the Keyring if it is locked</property>
+                            <property name="tooltip_text" translatable="yes">If the Keyring is locked Passwords will not survive past the current session.</property>
+                            <property name="visible">1</property>
+                            <property name="can_focus">1</property>
+                            <property name="halign">start</property>
+                            <property name="draw_indicator">1</property>
+                          </object>
+                          <packing>
+                            <property name="left_attach">0</property>
+                            <property name="top_attach">4</property>
+                            <property name="width">2</property>
+                          </packing>
+                        </child>
                       </object>
                       <packing>
                         <property name="left_attach">0</property>
