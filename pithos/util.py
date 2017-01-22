@@ -121,6 +121,85 @@ class _SecretService:
 
         return True
 
+    def get_account_password_async(self, email, callback, user_data=None):
+        def on_password_lookup_finish(source, result, data):
+            callback, user_data = data
+            password = Secret.password_lookup_finish(result) or ''
+            if user_data:
+                callback(password, user_data)
+            else:
+                callback(password)
+
+        Secret.password_lookup(
+            self._account_schema,
+            {"email": email},
+            None,
+            on_password_lookup_finish,
+            (callback, user_data),
+            )
+
+    def set_account_password_async(self, email, password, previous_email=None, callback=None):
+        def on_previous_email_password_clear_finish(source, result, callback):
+            if not Secret.password_clear_finish(result):
+                logging.warning('Failed to clear previous account')
+
+        def on_current_email_password_clear_finish(source, result, callback):
+            result = Secret.password_clear_finish(result)
+            if callback:
+                callback(result)
+
+        def on_password_lookup_finish(source, result, data):
+            callback, password = data
+            if password == Secret.password_lookup_finish(result) or '':
+                logging.debug('Password unchanged')
+                if callback:
+                    callback(False)
+            else:
+                Secret.password_store(
+                    self._account_schema,
+                    {'email': email},
+                    self._current_collection,
+                    'Pandora Account',
+                    password,
+                    None,
+                    on_password_store_finish,
+                    callback,
+                )
+
+        def on_password_store_finish(source, result, callback):
+            result = Secret.password_store_finish(result)
+            if not result:
+                logging.warning('Failed to save password')
+            if callback:
+                callback(result)
+
+        if previous_email and previous_email != email:
+            Secret.password_clear(
+                self._account_schema,
+                {"email": previous_email},
+                None,
+                on_previous_email_password_clear_finish,
+                callback,
+            )
+
+        if not password:
+            Secret.password_clear(
+                self._account_schema,
+                {"email": email},
+                None,
+                on_current_email_password_clear_finish,
+                callback,
+            )
+
+        else:
+            Secret.password_lookup(
+                self._account_schema,
+                {"email": email},
+                None,
+                on_password_lookup_finish,
+                (callback, password),
+            )
+
 SecretService = _SecretService()
 
 def parse_proxy(proxy):

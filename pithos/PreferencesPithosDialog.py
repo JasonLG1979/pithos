@@ -161,17 +161,26 @@ class PreferencesPithosDialog(Gtk.Dialog):
 
     @GtkTemplate.Callback
     def on_show(self, widget):
+        def set_password_text(password):
+            self.password_entry.set_text(password)
         self.settings.delay()
 
         self.last_email = self.settings['email']
-        self.password_entry.set_text(SecretService.get_account_password(self.settings['email']))
+        SecretService.get_account_password_async(self.settings['email'], set_password_text)
         self.on_account_changed(None)
 
     def do_response(self, response_id):
+        def login_changed(changed):
+            if changed:
+                self.emit('login-changed')
         if response_id == Gtk.ResponseType.APPLY:
             self.settings.apply()
-            if SecretService.set_account_password(self.settings['email'], self.password_entry.get_text(),
-                                    self.last_email):
-                self.emit('login-changed')
+            SecretService.set_account_password_async(
+                self.settings['email'],
+                self.password_entry.get_text(),
+                self.last_email,
+                login_changed,
+            )
+
         else:
             self.settings.revert()

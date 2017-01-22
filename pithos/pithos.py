@@ -175,7 +175,7 @@ class PithosWindow(Gtk.ApplicationWindow):
                 self.show()
                 self.show_preferences()
             else:
-                self.pandora_connect()
+                self.pandora_connect(email=email, password=password)
 
     def init_core(self):
         #                                Song object            display text  icon  album art
@@ -443,7 +443,32 @@ class PithosWindow(Gtk.ApplicationWindow):
     def set_audio_quality(self, *ignore):
         self.worker_run('set_audio_quality', (self.settings['audio-quality'],))
 
-    def pandora_connect(self, *ignore, message="Logging in...", callback=None):
+    def pandora_connect(self, *ignore, message="Logging in...", callback=None, email=None, password=None):
+        def pandora_ready(*ignore):
+            logging.info("Pandora connected")
+            self.process_stations(self)
+            if callback:
+                callback()
+
+        def login_to_pandora(email, password, client, message, pandora_ready, callback):
+            args = (
+                client,
+                email,
+                password,
+            )
+
+            self.worker_run('connect', args, pandora_ready, message, 'login')
+
+        def on_got_password(password, user_data):
+            email, client, message, pandora_ready, callback = user_data
+            if not email or not password:
+                # You probably shouldn't be able to reach here
+                # with no credentials set
+                logging.error('No email or no password set!')
+                self.quit()
+
+            login_to_pandora(email, password, client, message, pandora_ready, callback)
+
         if self.settings['pandora-one']:
             client = client_keys[default_one_client_id]
         else:
@@ -458,29 +483,11 @@ class PithosWindow(Gtk.ApplicationWindow):
                 client = json.loads(force_client)
             except json.JSONDecodeError:
                 logging.error("Could not parse force_client json")
-
-
-        email = self.settings['email']
-        password = SecretService.get_account_password(email)
-        if not email or not password:
-            # You probably shouldn't be able to reach here
-            # with no credentials set
-            logging.error('No email or no password set!')
-            self.quit()
-
-        args = (
-            client,
-            email,
-            password,
-        )
-
-        def pandora_ready(*ignore):
-            logging.info("Pandora connected")
-            self.process_stations(self)
-            if callback:
-                callback()
-
-        self.worker_run('connect', args, pandora_ready, message, 'login')
+        if email and password:
+            login_to_pandora(email, password, client, message, pandora_ready, callback)
+        else:
+            email = self.settings['email']
+            SecretService.get_account_password_async(email, on_got_password, (email, client, message, pandora_ready, callback))
 
     def pandora_reconnect(self, *ignore):
         ''' Stop everything and reconnect '''
