@@ -313,9 +313,9 @@ class PithosMprisService(DBusServiceObject):
         """
         # Map pithos ratings to something MPRIS understands
         if song.rating == 'love':
-            userRating = 5
+            userRating = 1.0
         else:
-            userRating = 0
+            userRating = 0.0
 
         # Ensure is a valid dbus path by converting to hex
         track_id = codecs.encode(bytes(song.trackToken, 'ascii'), 'hex').decode('ascii')
@@ -324,7 +324,7 @@ class PithosMprisService(DBusServiceObject):
             "xesam:title": GLib.Variant('s', song.title or "Title Unknown"),
             "xesam:artist": GLib.Variant('as', [song.artist] or ["Artist Unknown"]),
             "xesam:album": GLib.Variant('s', song.album or "Album Unknown"),
-            "xesam:userRating": GLib.Variant('i', userRating),
+            "xesam:userRating": GLib.Variant('d', userRating),
             "xesam:url": GLib.Variant('s', song.audioUrl),
             "mpris:length": GLib.Variant('x', self._duration),
             "pithos:rating": GLib.Variant('s', song.rating or ""),
