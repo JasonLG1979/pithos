@@ -317,23 +317,6 @@ class PithosMprisService(DBusServiceObject):
         else:
             userRating = 0
 
-        # Try to use the generic audio MIME type icon from the user's current theme
-        # for the cover image if we don't get one from Pandora
-        # Workaround for:
-        # https://github.com/eonpatapon/gnome-shell-extensions-mediaplayer/issues/248
-
-        if song.artUrl is not None:
-            artUrl = song.artUrl
-        else:
-            icon_sizes = Gtk.IconTheme.get_icon_sizes(Gtk.IconTheme.get_default(), 'audio-x-generic')
-            if -1 in icon_sizes: # -1 is a scalable icon(svg)
-                best_icon = -1
-            else:
-                icon_sizes = sorted(icon_sizes, key=int, reverse=True)
-                best_icon = icon_sizes[0]
-            icon_info = Gtk.IconTheme.get_default().lookup_icon('audio-x-generic', best_icon, 0)
-            artUrl = "file://{}".format(icon_info.get_filename())
-
         # Ensure is a valid dbus path by converting to hex
         track_id = codecs.encode(bytes(song.trackToken, 'ascii'), 'hex').decode('ascii')
         self._metadata = {
@@ -342,11 +325,16 @@ class PithosMprisService(DBusServiceObject):
             "xesam:artist": GLib.Variant('as', [song.artist] or ["Artist Unknown"]),
             "xesam:album": GLib.Variant('s', song.album or "Album Unknown"),
             "xesam:userRating": GLib.Variant('i', userRating),
-            "mpris:artUrl": GLib.Variant('s', artUrl),
             "xesam:url": GLib.Variant('s', song.audioUrl),
             "mpris:length": GLib.Variant('x', self._duration),
             "pithos:rating": GLib.Variant('s', song.rating or ""),
         }
+
+        # If we don't have an artUrl the best thing we can
+        # do is not even have "mpris:artUrl" in the metadata,
+        # and let the applet decide what to do.
+        if song.artUrl is not None:
+            self._metadata["mpris:artUrl"] = GLib.Variant('s', song.artUrl)
 
         return self._metadata
 
