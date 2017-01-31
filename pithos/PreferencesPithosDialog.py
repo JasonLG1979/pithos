@@ -87,6 +87,7 @@ class PreferencesPithosDialog(Gtk.Dialog):
     email_entry = GtkTemplate.Child()
     password_entry = GtkTemplate.Child()
     audio_quality_combo = GtkTemplate.Child()
+    logging_level_combo = GtkTemplate.Child()
     proxy_entry = GtkTemplate.Child()
     control_proxy_entry = GtkTemplate.Child()
     control_proxy_pac_entry = GtkTemplate.Child()
@@ -109,6 +110,21 @@ class PreferencesPithosDialog(Gtk.Dialog):
         self.audio_quality_combo.add_attribute(render_text, "text", 1)
         self.audio_quality_combo.set_id_column(0)
 
+        # initialize the "Logging Level" combobox backing list
+        log_fmt_store = Gtk.ListStore(GObject.TYPE_STRING, GObject.TYPE_STRING)
+        logging_levels = [
+            ('debug', 'High'),
+            ('verbose', 'Medium'),
+            ('warning', 'Low'),
+        ]
+        for logging_level in logging_levels:
+            log_fmt_store.append(logging_level)
+        self.logging_level_combo.set_model(log_fmt_store)
+        render_text = Gtk.CellRendererText()
+        self.logging_level_combo.pack_start(render_text, True)
+        self.logging_level_combo.add_attribute(render_text, "text", 1)
+        self.logging_level_combo.set_id_column(0)
+
         if not pacparser:
             self.control_proxy_pac_entry.set_sensitive(False)
             self.control_proxy_pac_entry.set_tooltip_text("Please install python-pacparser")
@@ -120,6 +136,7 @@ class PreferencesPithosDialog(Gtk.Dialog):
             'control-proxy': (self.control_proxy_entry, 'text'),
             'control-proxy-pac': (self.control_proxy_pac_entry, 'text'),
             'audio-quality': (self.audio_quality_combo, 'active-id'),
+            'log-level': (self.logging_level_combo, 'active-id'),
         }
 
         for key, val in settings_mapping.items():

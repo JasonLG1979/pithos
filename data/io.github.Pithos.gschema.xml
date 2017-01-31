@@ -63,6 +63,16 @@
       <summary>Quality of songs</summary>
     </key>
 
+    <key type="s" name="log-level">
+      <choices>
+        <choice value="debug"/>
+        <choice value="verbose"/>
+        <choice value="warning"/>
+      </choices>
+      <default>"verbose"</default>
+      <summary>Logging Level</summary>
+    </key>
+
   </schema>
 
   

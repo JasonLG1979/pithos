@@ -437,7 +437,7 @@ class PithosWindow(Gtk.ApplicationWindow):
 
         self.worker_run('set_url_opener', (control_opener,), self.pandora_connect if reconnect else None)
 
-    def set_audio_quality(self, *ignore):
+    def set_audio_quality(self, *args):
         self.worker_run('set_audio_quality', (self.settings['audio-quality'],))
 
     def pandora_connect(self, *ignore, message="Logging in...", callback=None):

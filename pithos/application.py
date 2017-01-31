@@ -93,16 +93,38 @@ class PithosApplication(Gtk.Application):
 
         handlers = []
         try:
-            from systemd.journal import JournalHandler
-
+            from systemd.journal import JournalHandler 
             journal = JournalHandler(SYSLOG_IDENTIFIER=self.props.application_id)
 
             # We can be more verbose with the journal and filter it later
             # and don't need fancy formatting as its part of the structure
-            journal.setLevel(logging.INFO)
+            journal.setLevel(logging.DEBUG)
             journal.setFormatter(logging.Formatter())
-
             handlers.append(journal)
+
+            def on_log_level_change(settings, key):
+                logging.root.handlers = []
+                handlers = []
+                journal = JournalHandler(SYSLOG_IDENTIFIER=self.props.application_id)
+                level = settings[key]
+                if level == 'verbose':
+                    log_level = logging.INFO
+                elif level == 'debug':
+                    log_level = logging.DEBUG
+                elif level == 'warning':
+                    log_level = logging.WARN
+                journal.setLevel(log_level)
+                journal.setFormatter(logging.Formatter())
+                stream = logging.StreamHandler()
+                stream.setLevel(log_level)
+                stream.setFormatter(logging.Formatter(fmt='%(levelname)s - %(module)s:%(funcName)s:%(lineno)d - %(message)s'))
+                handlers.append(stream)
+                logging.basicConfig(level=logging.NOTSET, handlers=handlers)
+
+            settings = Gio.Settings.new('io.github.Pithos')
+            settings.connect('changed::log-level', on_log_level_change)
+            on_log_level_change(settings, 'log-level')
+
         except ImportError:
             pass
 
