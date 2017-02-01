@@ -92,19 +92,6 @@ class PithosApplication(Gtk.Application):
             return 0
 
         handlers = []
-        try:
-            from systemd.journal import JournalHandler
-
-            journal = JournalHandler(SYSLOG_IDENTIFIER=self.props.application_id)
-
-            # We can be more verbose with the journal and filter it later
-            # and don't need fancy formatting as its part of the structure
-            journal.setLevel(logging.INFO)
-            journal.setFormatter(logging.Formatter())
-
-            handlers.append(journal)
-        except ImportError:
-            pass
 
         # Set the logging level to show debug messages
         if options.contains('debug'):
