@@ -79,4 +79,18 @@
     </key>
 
   </schema>
+
+  <schema id="io.github.Pithos.plugin-default-enabled">
+
+    <key type="b" name="enabled">
+      <default>true</default>
+      <summary>If the plugin is loaded</summary>
+    </key>
+
+    <key type="s" name="data">
+      <default>""</default>
+      <summary>Custom data set by plugin</summary>
+    </key>
+
+  </schema>
 </schemalist>

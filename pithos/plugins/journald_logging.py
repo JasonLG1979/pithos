@@ -30,6 +30,7 @@ LOG_LEVELS = {
 class JournalLoggingPlugin(PithosPlugin):
     preference = 'journald-logging'
     description = 'Store logs with the journald service'
+    default_enabled = True
 
     _logging_changed_handler = None
 

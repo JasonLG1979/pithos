@@ -23,6 +23,9 @@ class PithosPlugin:
     _PITHOS_PLUGIN = True # used to find the plugin class in a module
     preference = None
     description = ""
+    # With very few exceptions
+    # plugins should default to disabled.
+    default_enabled = False
 
     def __init__(self, name, window):
         self.name = name
@@ -95,8 +98,11 @@ def load_plugins(window):
             plugin = plugins[name] = load_plugin(name, window)
         else:
             plugin = plugins[name]
-
-        plugin.settings = Gio.Settings.new_with_path('io.github.Pithos.plugin', '/io/github/Pithos/{}/'.format(name))
+        if plugin.default_enabled:
+            schema_id = 'io.github.Pithos.plugin-default-enabled'
+        else:
+            schema_id = 'io.github.Pithos.plugin'
+        plugin.settings = Gio.Settings.new_with_path(schema_id, '/io/github/Pithos/{}/'.format(name))
 
         if plugin.settings['enabled']:
             plugin.enable()
