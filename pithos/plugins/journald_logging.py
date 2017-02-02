@@ -38,10 +38,7 @@ class JournalLoggingPlugin(PithosPlugin):
         try:
             from systemd.journal import JournalHandler
             self._journal = JournalHandler(SYSLOG_IDENTIFIER='io.github.Pithos')
-            self._journal.setFormatter(
-                logging.Formatter(fmt='%(levelname)s - %(module)s:%(funcName)s:%(lineno)d - %(message)s'),
-            )
-
+            self._journal.setFormatter(logging.Formatter())
             self._logger = logging.getLogger()
             self.preferences_dialog = LoggingPluginPrefsDialog(self.window, self.settings)
         except ImportError:
