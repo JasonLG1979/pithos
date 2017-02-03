@@ -13,7 +13,7 @@
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import html
-from gi.repository import GObject, Gtk
+from gi.repository import GObject, Gtk, GLib
 
 from .gi_composites import GtkTemplate
 
@@ -36,10 +36,19 @@ class SearchDialog(Gtk.Dialog):
         self.treeview.set_model(self.model)
         self.query = ''
         self.result = None
+        self.search_timeout_id = 0
 
     @GtkTemplate.Callback
     def search_clicked(self, widget):
-        self.search(self.entry.get_text())
+        # Add a little bit more of a delay to the search entry.
+        # The default delay of 150 ms is too fast. We want enough
+        # Time for the user to finish typing and for Pandora to send
+        # results back before we send another search query.
+        # This helps stop redundant search queries.
+        if self.search_timeout_id:
+            GLib.source_remove(self.search_timeout_id)
+            self.search_timeout_id = 0
+        self.search_timeout_id = GLib.timeout_add(350, self.search)
 
     @GtkTemplate.Callback
     def get_selected(self):
@@ -47,8 +56,9 @@ class SearchDialog(Gtk.Dialog):
         if sel[1]:
             return self.treeview.get_model().get_value(sel[1], 0)
 
-    def search(self, query):
-        self.query = query
+    def search(self):
+        self.search_timeout_id = 0
+        self.query = self.entry.get_text()
         self.model.clear()
 
         if not self.query:
