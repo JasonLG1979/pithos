@@ -16,7 +16,10 @@
 import logging
 import glob
 import os
-from gi.repository import Gio
+import sys
+from gi.repository import Gio, GLib
+
+THIRD_PARTY_PLUGINS = 'pithos/third-party-plugins'
 
 
 class PithosPlugin:
@@ -65,10 +68,14 @@ class ErrorPlugin(PithosPlugin):
         self.enabled = False
 
 
-def load_plugin(name, window):
+def load_plugin(name, window, path):
     try:
-        module = __import__('pithos.plugins.' + name)
-        module = getattr(module.plugins, name)
+        if path:
+            sys.path.append(os.path.dirname('{}/{}.py'.format(path, name)))
+            module = __import__(name)
+        else:
+            module = __import__('pithos.plugins.' + name)
+            module = getattr(module.plugins, name)
 
     except ImportError as e:
         return ErrorPlugin(name, e.msg)
@@ -93,22 +100,45 @@ def _maybe_migrate_setting(new_setting, name):
         new_setting['enabled'] = True
         old_setting.reset('enabled')
 
+def discover_plugins(path):
+    return [fname[:-3] for fname in glob.glob1(path, "*.py") if not fname.startswith("_")]
 
 def load_plugins(window):
     plugins = window.plugins
 
     settings = window.settings
     in_tree_plugins = settings.props.settings_schema.list_children()
-    plugins_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plugins")
-    discovered_plugins = (fname[:-3] for fname in glob.glob1(plugins_dir, "*.py") if not fname.startswith("_"))
+    default_plugins_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plugins")
+    discovered_plugins = discover_plugins(default_plugins_dir)
+    try:
+        third_party_plugins_dir = os.path.join(
+            GLib.get_user_config_dir(),
+            THIRD_PARTY_PLUGINS,
+        )
+
+        if not os.path.exists(third_party_plugins_dir):
+            os.makedirs(third_party_plugins_dir)
+
+        third_party_plugins = discover_plugins(third_party_plugins_dir)
+
+    except (IOError, GLib.Error) as e:
+        logging.warning('Error finding 3rd party plugins: {}'.format(e))
+        third_party_plugins_dir = None
+        third_party_plugins = None
+
+    if third_party_plugins:
+        discovered_plugins = discovered_plugins + third_party_plugins
 
     for name in discovered_plugins:
-        if name not in plugins:
-            plugin = plugins[name] = load_plugin(name, window)
+        path = None
+        settings_name = name.replace('_', '-')
+        if settings_name not in in_tree_plugins:
+            path = third_party_plugins_dir     
+        if name not in plugins:                
+            plugin = plugins[name] = load_plugin(name, window, path)
         else:
             plugin = plugins[name]
 
-        settings_name = name.replace('_', '-')
         if settings_name in in_tree_plugins:
             plugin.settings = settings.get_child(settings_name)
             _maybe_migrate_setting(plugin.settings, name)
