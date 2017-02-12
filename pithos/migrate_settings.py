@@ -20,7 +20,7 @@ from .util import set_account_password
 
 
 def _get_plugin_settings(name):
-    return Gio.Settings.new_with_path('io.github.Pithos.plugin', '/io/github/Pithos/{}/'.format(name))
+    return Gio.Settings.new('io.github.Pithos.plugins.{}'.format(name))
 
 
 def maybe_migrate_settings():

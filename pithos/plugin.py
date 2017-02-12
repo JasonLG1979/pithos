@@ -84,21 +84,10 @@ def load_plugin(name, window):
     return plugin_class(name, window)
 
 
-def _maybe_migrate_setting(new_setting, name):
-    if name != 'notification_icon':
-        return
-
-    old_setting = Gio.Settings.new_with_path('io.github.Pithos.plugin', '/io/github/Pithos/{}/'.format(name))
-    if old_setting['enabled']:
-        new_setting['enabled'] = True
-        old_setting.reset('enabled')
-
-
 def load_plugins(window):
     plugins = window.plugins
 
     settings = window.settings
-    in_tree_plugins = settings.props.settings_schema.list_children()
     plugins_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plugins")
     discovered_plugins = (fname[:-3] for fname in glob.glob1(plugins_dir, "*.py") if not fname.startswith("_"))
 
@@ -109,13 +98,7 @@ def load_plugins(window):
             plugin = plugins[name]
 
         settings_name = name.replace('_', '-')
-        if settings_name in in_tree_plugins:
-            plugin.settings = settings.get_child(settings_name)
-            _maybe_migrate_setting(plugin.settings, name)
-        else:
-            # Out of tree plugin
-            plugin.settings = Gio.Settings.new_with_path('io.github.Pithos.plugin',
-                                                         '/io/github/Pithos/{}/'.format(settings_name))
+        plugin.settings = Gio.Settings.new('io.github.Pithos.plugins.{}'.format(settings_name))
 
         if plugin.settings['enabled']:
             plugin.enable()

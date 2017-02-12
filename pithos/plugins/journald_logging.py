@@ -44,12 +44,14 @@ class JournalLoggingPlugin(PithosPlugin):
             return _('Systemd Python module not found')
 
     def on_enable(self):
-        self._on_logging_changed(None, self.settings['data'] or 'verbose')
+        level = self.settings['logging-level']
+        self._journal.setLevel(LOG_LEVELS[level])
         self._logger.addHandler(self._journal)
         self._logging_changed_handler = self.preferences_dialog.connect('logging-changed', self._on_logging_changed)
+        logging.info('setting journald logging level to: {}'.format(level))
 
     def _on_logging_changed(self, prefs_dialog, level):
-        self.settings['data'] = level
+        self.settings['logging-level'] = level
         self._journal.setLevel(LOG_LEVELS[level])
         logging.info('setting journald logging level to: {}'.format(level))
 
@@ -102,7 +104,7 @@ class LoggingPluginPrefsDialog(Gtk.Dialog):
         content_area.show_all()
 
     def _reset_combo(self):
-        self.log_level_combo.set_active_id(self.settings['data'] or 'verbose')
+        self.log_level_combo.set_active_id(self.settings['logging-level'])
 
     def _on_response(self, dialog, response):
         if response != Gtk.ResponseType.APPLY:
@@ -110,7 +112,7 @@ class LoggingPluginPrefsDialog(Gtk.Dialog):
             self._reset_combo()
             return
 
-        setting = self.settings['data']
+        setting = self.settings['logging-level']
         active_id = self.log_level_combo.get_active_id()
 
         if setting == active_id:

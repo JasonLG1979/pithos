@@ -63,42 +63,85 @@
       <summary>Quality of songs</summary>
     </key>
 
-    <child name="mediakeys" schema="io.github.Pithos.plugin-enabled"/>
-    <child name="screensaver-pause" schema="io.github.Pithos.plugin-enabled"/>
-    <child name="mpris" schema="io.github.Pithos.plugin-enabled"/>
-    <child name="journald-logging" schema="io.github.Pithos.plugin-enabled"/>
-    <child name="notify" schema="io.github.Pithos.plugin"/>
-    <child name="lastfm" schema="io.github.Pithos.plugin"/>
-    <child name="notification-icon" schema="io.github.Pithos.plugin"/>
-
   </schema>
 
-  <schema id="io.github.Pithos.plugin" gettext-domain="pithos">
-
-    <key type="b" name="enabled">
-      <default>false</default>
-      <summary>If the plugin is loaded</summary>
-    </key>
-
-    <key type="s" name="data">
-      <default>""</default>
-      <summary>Custom data set by plugin</summary>
-    </key>
-
-  </schema>
-
-  <!-- Hacky solution to have some plugins enabled by default? -->
-  <schema id="io.github.Pithos.plugin-enabled" gettext-domain="pithos">
+  <schema path="/io/github/Pithos/plugins/mediakeys/" id="io.github.Pithos.plugins.mediakeys" gettext-domain="pithos">
 
     <key type="b" name="enabled">
       <default>true</default>
-      <summary>If the plugin is loaded</summary>
+      <summary>Control playback with media keys</summary>
+    </key>
+
+  </schema>
+
+  <schema path="/io/github/Pithos/plugins/screensaver-pause/" id="io.github.Pithos.plugins.screensaver-pause" gettext-domain="pithos">
+
+    <key type="b" name="enabled">
+      <default>true</default>
+      <summary>Pause playback when screensaver starts</summary>
+    </key>
+
+  </schema>
+
+  <schema path="/io/github/Pithos/plugins/mpris/" id="io.github.Pithos.plugins.mpris" gettext-domain="pithos">
+
+    <key type="b" name="enabled">
+      <default>true</default>
+      <summary>Allows control with external programs</summary>
+    </key>
+
+  </schema>
+
+  <schema path="/io/github/Pithos/plugins/journald-logging/" id="io.github.Pithos.plugins.journald-logging" gettext-domain="pithos">
+
+    <key type="b" name="enabled">
+      <default>true</default>
+      <summary>Store logs with the journald service</summary>
+    </key>
+
+    <key type="s" name="logging-level">
+      <choices>
+        <choice value="debug"/>
+        <choice value="verbose"/>
+        <choice value="warning"/>
+      </choices>
+      <default>"verbose"</default>
+      <summary>The logging level</summary>
+    </key>
+
+
+  </schema>
+
+  <schema path="/io/github/Pithos/plugins/notify/" id="io.github.Pithos.plugins.notify" gettext-domain="pithos">
+
+    <key type="b" name="enabled">
+      <default>false</default>
+      <summary>Shows notifications on song change</summary>
+    </key>
+
+  </schema>
+
+  <schema path="/io/github/Pithos/plugins/lastfm/" id="io.github.Pithos.plugins.lastfm" gettext-domain="pithos">
+
+    <key type="b" name="enabled">
+      <default>false</default>
+      <summary>Scrobble tracks listened to on Last.fm</summary>
     </key>
 
     <key type="s" name="data">
       <default>""</default>
-      <summary>Custom data set by plugin</summary>
+      <summary>Session Token</summary>
     </key>
 
   </schema>
+
+  <schema path="/io/github/Pithos/plugins/notification-icon/" id="io.github.Pithos.plugins.notification-icon" gettext-domain="pithos">
+
+    <key type="b" name="enabled">
+      <default>false</default>
+      <summary>Adds pithos icon to system tray</summary>
+    </key>
+
+  </schema>
+
 </schemalist>
