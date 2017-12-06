@@ -295,6 +295,8 @@ class PithosWindow(Gtk.ApplicationWindow):
         self.stations_model = Gtk.ListStore(GObject.TYPE_PYOBJECT, str,          int)
 
         Gst.init(None)
+        self._gst_discoverer = GstPbutils.Discoverer.new(10 * Gst.SECOND)        
+        self._gst_discoverer.connect('discovered', self._on_gst_discovered)
         self._query_duration = Gst.Query.new_duration(Gst.Format.TIME)
         self._query_position = Gst.Query.new_position(Gst.Format.TIME)
         self._query_buffer = Gst.Query.new_buffering(Gst.Format.PERCENT)
@@ -332,7 +334,6 @@ class PithosWindow(Gtk.ApplicationWindow):
 
         bus = self.player.get_bus()
         bus.add_signal_watch()
-        bus.connect("message::stream-start", self.on_gst_stream_start)
         bus.connect("message::eos", self.on_gst_eos)
         bus.connect("message::buffering", self.on_gst_buffering)
         bus.connect("message::error", self.on_gst_error)
@@ -753,7 +754,10 @@ class PithosWindow(Gtk.ApplicationWindow):
         self.current_song.start_time = time.time()
         self.songs_treeview.scroll_to_cell(song_index, use_align=True, row_align = 1.0)
         self.songs_treeview.set_cursor(song_index, None, 0)
-        self.set_title("%s by %s - Pithos" % (song.title, song.artist))
+        if song.is_ad:
+            self.set_title('Commercial Advertisement - Pithos')
+        else:
+            self.set_title("%s by %s - Pithos" % (song.title, song.artist))
 
         self.update_song_row()
 
@@ -890,15 +894,16 @@ class PithosWindow(Gtk.ApplicationWindow):
             songs_left_to_process -= 1
             if index<len(self.songs_model) and self.songs_model[index][0] is song: # in case the playlist has been reset
                 logging.info("Downloaded album art for %i"%song.index)
-                song.art_pixbuf = pixbuf
-                self.songs_model[index][3]=pixbuf
-                self.update_song_row(song)
-                if file_url:
-                    song.artUrl = file_url
-                    # The song is either the current song or we got the cover after
-                    # after the timeout has expired.
-                    if song is self.current_song or not self.playlist_update_timer_id:
-                        self.emit('metadata-changed', song)
+                if not song.is_ad:
+                    song.art_pixbuf = pixbuf
+                    self.songs_model[index][3]=pixbuf
+                    self.update_song_row(song)
+                    if file_url:
+                        song.artUrl = file_url
+                        # The song is either the current song or we got the cover after
+                        # after the timeout has expired.
+                        if song is self.current_song or not self.playlist_update_timer_id:
+                            self.emit('metadata-changed', song)
                 # We tried to get covers for all the songs in the playlist,
                 # and the timeout is still live. Cancel it and emit
                 # a 'songs-added' signal.
@@ -920,6 +925,7 @@ class PithosWindow(Gtk.ApplicationWindow):
                     self.worker_run(get_album_art, (i.artRadio, self.tempdir, i, i.index), art_callback)
                 else:
                     songs_left_to_process -= 1
+                self._gst_discoverer.discover_uri_async(i.audioUrl)
             # Give Pandora about 1 secs per song to return the playlist's cover art
             # after that emit a 'songs-added' Anyway. We can't wait forever after all.
             self.playlist_update_timer_id = GLib.timeout_add_seconds(song_count, emit_songs_added, song_count)
@@ -977,6 +983,7 @@ class PithosWindow(Gtk.ApplicationWindow):
         self.quit()
 
     def station_changed(self, station, reconnecting=False):
+        self._gst_discoverer.stop()
         if station is self.current_station: return
         self.waiting_for_playlist = False
         if not reconnecting:
@@ -987,6 +994,7 @@ class PithosWindow(Gtk.ApplicationWindow):
         self.current_station_id = station.id
         self.current_station = station
         self.settings.set_string('last-station-id', self.current_station_id)
+        self._gst_discoverer.start()
         if not reconnecting:
             self.get_playlist(start = True)
         self.stations_label.set_text(station.name)
@@ -1061,19 +1069,31 @@ class PithosWindow(Gtk.ApplicationWindow):
         else:
             return True
 
-    def on_gst_stream_start(self, bus, message):
-        # Edge case. We might get this singal while we're reconnecting to Pandora.
-        # If so self.current_song will be None.
-        if self.current_song is None:
-            return
-        # Fallback to using song.trackLength which is in seconds and converted to nanoseconds
-        self.current_song.duration = self.query_duration() or self.current_song.trackLength * Gst.SECOND
-        self.current_song.duration_message = self.format_time(self.current_song.duration)
-        self.update_song_row()
-        self.check_if_song_is_ad()
-        # We can't seek so duration in MPRIS is just for display purposes if it's not off by more than a sec it's OK.
-        if self.current_song.get_duration_sec() != self.current_song.trackLength:
-            self.emit('metadata-changed', self.current_song)
+    def _on_gst_discovered(self, discoverer, info, error):
+        if not error and info.get_result() == GstPbutils.DiscovererResult.OK:
+            url = info.get_uri()
+            duration = info.get_duration()
+            if url and duration:
+                stop = len(self.songs_model)
+                start = max(0, stop - 5)
+                for i in range(start, stop):
+                    song = self.songs_model[i][0]
+                    if song.audioUrl == url:
+                        song.duration_message = self.format_time(duration)
+                        song.duration = duration
+                        dur_secs = song.get_duration_sec()
+                        song.is_ad = dur_secs < 45
+                        if song.is_ad:
+                            # Clear the bogus cover and use the default cover
+                            song.art_pixbuf = None
+                            song.artUrl = None
+                            self.songs_model[i][3] = None
+                            if song is self.current_song:
+                                self.set_title('Commercial Advertisement - Pithos')
+                        if dur_secs != song.trackLength or song.is_ad:
+                            self.update_song_row(song)
+                            self.emit('metadata-changed', song)
+                        return
 
     def on_gst_eos(self, bus, message):
         logging.info("EOS")
@@ -1108,20 +1128,6 @@ class PithosWindow(Gtk.ApplicationWindow):
 
         if not GstPbutils.install_plugins_installation_in_progress():
             self.next_song()
-
-    def check_if_song_is_ad(self):
-        if self.current_song.is_ad is None:
-            if self.current_song.duration:
-                if self.current_song.get_duration_sec() < 45:  # Less than 45 seconds we assume it's an ad
-                    logging.info('Ad detected!')
-                    self.current_song.is_ad = True
-                    self.update_song_row()
-                    self.set_title("Commercial Advertisement - Pithos")
-                else:
-                    logging.info('Not an Ad..')
-                    self.current_song.is_ad = False
-            else:
-                logging.warning('dur_stat is False. The assumption that duration is available once the stream-start messages feeds is bad.')
 
     def on_gst_buffering(self, bus, message):
         # React to the buffer message immediately and also fire a short repeating timeout
